@@ -6,7 +6,7 @@ A neon, player-built arcade you host yourself. Play a floor full of mini-games, 
 
 ## Features
 
-- **8 built-in games** — Reflex Tap, Memory Match, Math Blitz, Tic-Tac-Toe Duel, Dino Run, Geometry Jump, Color Rush, and Mole Smash.
+- **12 built-in games** — Reflex Tap, Memory Match, Math Blitz, Tic-Tac-Toe Duel, Dino Run, Geometry Jump, Neon Obby (parkour obstacle course), Neon Snake, 2048, Flappy Neon, Color Rush, and Mole Smash.
 - **Real online multiplayer** — Tic-Tac-Toe Duel now plays against real people over the network:
   - **Quick Match** — get paired with the next person looking for a game.
   - **Private rooms** — create a 4-letter code and share it with a friend.

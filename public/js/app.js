@@ -9,6 +9,10 @@ const BUILTIN_GAMES = [
   { id:'tic-tac-toe', title:'Tic-Tac-Toe Duel', creator:'The Floor', pitch:'Three-in-a-row against a real player online — quick match or private room — or take on the Oracle AI.', emoji:'❌', pace:'slow', type:'strategy', players:'multi', difficulty:'hard', accent:'pink', builtin:true },
   { id:'dino-run', title:'Dino Run', creator:'The Floor', pitch:"An endless dash across the wasteland — jump the cacti, don't look back.", emoji:'🦖', pace:'fast', type:'reflex', players:'solo', difficulty:'easy', accent:'green', builtin:true },
   { id:'geo-jump', title:'Geometry Jump', creator:'The Floor', pitch:'An auto-runner over spikes with a margin for error that keeps shrinking. Timing is everything.', emoji:'🔺', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true },
+  { id:'neon-obby', title:'Neon Obby', creator:'The Floor', pitch:'A parkour obstacle course — run, jump the pits and spikes, and reach the flag. Clear a stage to unlock a harder one.', emoji:'🟩', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'green', builtin:true },
+  { id:'snake', title:'Neon Snake', creator:'The Floor', pitch:'Eat the pellets, grow the tail, and don\'t crush yourself. The classic, with a neon glow.', emoji:'🐍', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'green', builtin:true },
+  { id:'twenty48', title:'2048', creator:'The Floor', pitch:'Slide the tiles, merge matching numbers, and chase the elusive 2048 tile.', emoji:'🧮', pace:'slow', type:'puzzle', players:'solo', difficulty:'medium', accent:'yellow', builtin:true },
+  { id:'flappy', title:'Flappy Neon', creator:'The Floor', pitch:'One button, endless pipes. Tap to flap and thread the gaps for as long as your nerves hold.', emoji:'🐤', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'cyan', builtin:true },
   { id:'color-rush', title:'Color Rush', creator:'The Floor', pitch:'A color flashes, four buttons appear — smash the right one before the clock runs out.', emoji:'🎨', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true, lockable:true },
   { id:'mole-smash', title:'Mole Smash', creator:'The Floor', pitch:'Nine holes, one mole, nowhere near enough time. Tap it before it ducks.', emoji:'🐹', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true, lockable:true },
 ];
@@ -295,6 +299,10 @@ function openBuiltinGame(id){
   if(id === 'tic-tac-toe') return openTicTacToe();
   if(id === 'dino-run') return openDinoRun();
   if(id === 'geo-jump') return openGeometryJump();
+  if(id === 'neon-obby') return openNeonObby();
+  if(id === 'snake') return openSnake();
+  if(id === 'twenty48') return openTwenty48();
+  if(id === 'flappy') return openFlappy();
   if(id === 'color-rush') return openColorRush();
   if(id === 'mole-smash') return openMoleSmash();
 }
@@ -1493,6 +1501,575 @@ function openMoleSmash(){
   }
 
   activeGameCleanup = () => { clearInterval(timer); clearTimeout(moleTimer); running = false; };
+}
+
+/* ---------- Neon Obby ---------- */
+function buildObbyLevel(n){
+  const groundY = 236, groundH = 80;
+  const platforms = [], spikes = [];
+  let x = 0;
+  const segs = 5 + n;
+  const gapBase = 58 + n * 7;
+  for(let i = 0; i < segs; i++){
+    const w = 120 + Math.random() * 80;
+    platforms.push({ x, y: groundY, w, h: groundH });
+    if(i > 0 && Math.random() < 0.35 + n * 0.08){
+      spikes.push({ x: x + w / 2 - 9, y: groundY - 14, w: 18, h: 14 });
+    }
+    x += w;
+    if(i < segs - 1){
+      const gap = Math.min(108, gapBase + Math.random() * 38);
+      if(gap > 78 || Math.random() < 0.4){
+        platforms.push({ x: x + gap / 2 - 32, y: groundY - 66 - Math.random() * 26, w: 64, h: 14 });
+      }
+      x += gap;
+    }
+  }
+  platforms.push({ x, y: groundY, w: 190, h: groundH });
+  return { platforms, spikes, goalX: x + 130, startX: 24, groundY };
+}
+
+function openNeonObby(){
+  openModal(`
+    <h3>&#129001; Neon Obby</h3>
+    <p class="ttt-status" id="obbyStatus">Arrows / A&D to run, Space or &uarr; to jump. Reach the flag &#127937;. You have 3 lives.</p>
+    <canvas id="obbyCanvas" width="460" height="260"
+      style="width:100%; max-width:460px; display:block; margin:0 auto; background:var(--void); border:1px solid var(--panel-edge); border-radius:10px; touch-action:none; cursor:pointer;"></canvas>
+    <div id="obbyControls" style="text-align:center; margin-top:14px;"></div>
+    <h4>Top 10 — most stages cleared wins</h4>
+    <div id="obbyLB" class="lb-live" data-game="neon-obby" data-unit="stages">${leaderboardHTML('neon-obby','stages')}</div>
+  `);
+
+  const canvas = document.getElementById('obbyCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = 460, H = 260;
+  const gravity = 0.62, moveSpeed = 3.3, jumpV = -11.4;
+  const accent = '#4deeea', spikeColor = '#ff4d94', goalColor = '#ffcc33';
+  const keys = {};
+  let level, player, cam, lives, stages, started, running, rafId;
+
+  function loadLevel(n){
+    level = buildObbyLevel(n);
+    player = { x: level.startX, y: level.groundY - 24, w: 20, h: 24, vx: 0, vy: 0, onGround: false };
+    cam = 0;
+  }
+  function reset(){
+    lives = 3; stages = 0; started = false; running = false;
+    loadLevel(0);
+  }
+  reset();
+
+  function overlap(a, b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+  function die(){
+    lives--;
+    if(lives <= 0){ gameOver(); return; }
+    document.getElementById('obbyStatus').textContent = `Ouch! ${lives} ${lives===1?'life':'lives'} left — stage ${stages+1}.`;
+    loadLevel(stages);
+  }
+
+  function nextStage(){
+    stages++;
+    awardCoins(6);
+    document.getElementById('obbyStatus').textContent = `Stage cleared! Now on stage ${stages+1}.`;
+    loadLevel(stages);
+  }
+
+  function update(){
+    player.vx = 0;
+    if(keys.left) player.vx = -moveSpeed;
+    if(keys.right) player.vx = moveSpeed;
+    player.vy += gravity;
+    if(player.vy > 14) player.vy = 14;
+
+    player.x += player.vx;
+    for(const p of level.platforms){
+      if(overlap(player, p)){
+        if(player.vx > 0) player.x = p.x - player.w;
+        else if(player.vx < 0) player.x = p.x + p.w;
+      }
+    }
+    if(player.x < 0) player.x = 0;
+
+    player.y += player.vy;
+    player.onGround = false;
+    for(const p of level.platforms){
+      if(overlap(player, p)){
+        if(player.vy > 0){ player.y = p.y - player.h; player.vy = 0; player.onGround = true; }
+        else if(player.vy < 0){ player.y = p.y + p.h; player.vy = 0; }
+      }
+    }
+
+    for(const s of level.spikes){ if(overlap(player, s)){ die(); return; } }
+    if(player.y > H + 60){ die(); return; }
+    if(player.x + player.w >= level.goalX){ nextStage(); return; }
+  }
+
+  function draw(){
+    cam = Math.max(0, player.x - 150);
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(-cam, 0);
+
+    ctx.fillStyle = '#241539';
+    for(const p of level.platforms) ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    for(const p of level.platforms) ctx.strokeRect(p.x, p.y, p.w, 3);
+
+    ctx.fillStyle = spikeColor;
+    for(const s of level.spikes){
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y + s.h);
+      ctx.lineTo(s.x + s.w / 2, s.y);
+      ctx.lineTo(s.x + s.w, s.y + s.h);
+      ctx.closePath(); ctx.fill();
+    }
+
+    ctx.strokeStyle = goalColor; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(level.goalX, level.groundY); ctx.lineTo(level.goalX, level.groundY - 60); ctx.stroke();
+    ctx.fillStyle = goalColor;
+    ctx.fillRect(level.goalX, level.groundY - 60, 26, 18);
+
+    ctx.fillStyle = accent;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.restore();
+
+    ctx.fillStyle = '#f5f0ff';
+    ctx.font = '12px "JetBrains Mono", monospace';
+    ctx.fillText('Stage ' + (stages + 1), 12, 20);
+    ctx.fillText('Lives ' + '\u2665'.repeat(Math.max(0, lives)), 12, 38);
+    if(!started){
+      ctx.fillStyle = 'rgba(245,240,255,0.85)';
+      ctx.fillText('Press \u2192 or Space to begin', 130, H / 2);
+    }
+  }
+
+  function loop(){
+    if(!running) return;
+    update();
+    if(running) draw();
+    if(running) rafId = requestAnimationFrame(loop);
+  }
+
+  function begin(){
+    if(started) return;
+    started = true; running = true;
+    document.getElementById('obbyStatus').textContent = 'Go! Reach the flag.';
+    loop();
+  }
+
+  function jump(){
+    begin();
+    if(running && player.onGround){ player.vy = jumpV; player.onGround = false; }
+  }
+
+  function gameOver(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    document.getElementById('obbyStatus').textContent = 'Run over — stages cleared: ' + stages;
+    const record = isNewRecord('neon-obby', stages, false);
+    document.getElementById('obbyControls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="obbyName" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="obbySave">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="obbyRestart">Play Again</button>
+      </div>`;
+    document.getElementById('obbySave').addEventListener('click', async () => {
+      const name = document.getElementById('obbyName').value.trim() || 'Anonymous';
+      await saveScore('neon-obby', name, stages, false);
+      document.getElementById('obbyLB').innerHTML = leaderboardHTML('neon-obby','stages');
+      document.getElementById('obbySave').disabled = true;
+    });
+    document.getElementById('obbyRestart').addEventListener('click', () => {
+      reset();
+      document.getElementById('obbyControls').innerHTML = '';
+      document.getElementById('obbyStatus').textContent = 'Arrows / A&D to run, Space or \u2191 to jump. Reach the flag.';
+      draw();
+    });
+  }
+
+  function keyDown(e){
+    if(e.code === 'ArrowLeft' || e.code === 'KeyA'){ keys.left = true; }
+    else if(e.code === 'ArrowRight' || e.code === 'KeyD'){ keys.right = true; }
+    else if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW'){ e.preventDefault(); jump(); }
+  }
+  function keyUp(e){
+    if(e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+    else if(e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+  }
+  document.addEventListener('keydown', keyDown);
+  document.addEventListener('keyup', keyUp);
+  canvas.addEventListener('mousedown', jump);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(rafId); document.removeEventListener('keydown', keyDown); document.removeEventListener('keyup', keyUp); };
+
+  draw();
+}
+
+/* ---------- Neon Snake ---------- */
+function openSnake(){
+  openModal(`
+    <h3>&#128013; Neon Snake</h3>
+    <p class="ttt-status" id="snakeStatus">Arrow keys or WASD to steer. Eat the pellets, avoid the walls and your own tail.</p>
+    <canvas id="snakeCanvas" width="440" height="300"
+      style="width:100%; max-width:440px; display:block; margin:0 auto; background:var(--void); border:1px solid var(--panel-edge); border-radius:10px; touch-action:none; cursor:pointer;"></canvas>
+    <div id="snakeControls" style="text-align:center; margin-top:14px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="snakeLB" class="lb-live" data-game="snake" data-unit="pts">${leaderboardHTML('snake','pts')}</div>
+  `);
+
+  const canvas = document.getElementById('snakeCanvas');
+  const ctx = canvas.getContext('2d');
+  const cell = 20, cols = 22, rows = 15;
+  const headColor = '#4deeea', bodyColor = '#2bb6b2', foodColor = '#ff4d94';
+  let snake, dir, nextDir, food, score, running, started, timer, speed;
+
+  function placeFood(){
+    let ok = false;
+    while(!ok){
+      food = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+      ok = !snake.some(s => s.x === food.x && s.y === food.y);
+    }
+  }
+  function reset(){
+    snake = [{ x: 6, y: 7 }, { x: 5, y: 7 }, { x: 4, y: 7 }];
+    dir = { x: 1, y: 0 }; nextDir = { x: 1, y: 0 };
+    score = 0; running = false; started = false; speed = 130;
+    placeFood();
+  }
+  reset();
+
+  function step(){
+    if(!running) return;
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    if(head.x < 0 || head.y < 0 || head.x >= cols || head.y >= rows || snake.some(s => s.x === head.x && s.y === head.y)){
+      gameOver(); return;
+    }
+    snake.unshift(head);
+    if(head.x === food.x && head.y === food.y){
+      score++;
+      awardCoins(1);
+      placeFood();
+      if(speed > 70) { speed -= 3; clearInterval(timer); timer = setInterval(step, speed); }
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = foodColor;
+    ctx.beginPath();
+    ctx.arc(food.x * cell + cell / 2, food.y * cell + cell / 2, cell / 2 - 2, 0, Math.PI * 2);
+    ctx.fill();
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? headColor : bodyColor;
+      ctx.fillRect(s.x * cell + 1, s.y * cell + 1, cell - 2, cell - 2);
+    });
+    ctx.fillStyle = '#f5f0ff';
+    ctx.font = '12px "JetBrains Mono", monospace';
+    ctx.fillText('Score: ' + score, canvas.width - 90, 18);
+    if(!started){
+      ctx.fillStyle = 'rgba(245,240,255,0.85)';
+      ctx.fillText('Press an arrow key to start', 110, canvas.height / 2);
+    }
+  }
+
+  function begin(){
+    if(started) return;
+    started = true; running = true;
+    timer = setInterval(step, speed);
+  }
+
+  function gameOver(){
+    running = false;
+    clearInterval(timer);
+    document.getElementById('snakeStatus').textContent = 'Game over — score: ' + score;
+    const record = isNewRecord('snake', score, false);
+    document.getElementById('snakeControls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="snakeName" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="snakeSave">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="snakeRestart">Play Again</button>
+      </div>`;
+    document.getElementById('snakeSave').addEventListener('click', async () => {
+      const name = document.getElementById('snakeName').value.trim() || 'Anonymous';
+      await saveScore('snake', name, score, false);
+      document.getElementById('snakeLB').innerHTML = leaderboardHTML('snake','pts');
+      document.getElementById('snakeSave').disabled = true;
+    });
+    document.getElementById('snakeRestart').addEventListener('click', () => {
+      reset();
+      document.getElementById('snakeControls').innerHTML = '';
+      document.getElementById('snakeStatus').textContent = 'Arrow keys or WASD to steer.';
+      draw();
+    });
+  }
+
+  function keyHandler(e){
+    let nd = null;
+    if(e.code === 'ArrowUp' || e.code === 'KeyW') nd = { x: 0, y: -1 };
+    else if(e.code === 'ArrowDown' || e.code === 'KeyS') nd = { x: 0, y: 1 };
+    else if(e.code === 'ArrowLeft' || e.code === 'KeyA') nd = { x: -1, y: 0 };
+    else if(e.code === 'ArrowRight' || e.code === 'KeyD') nd = { x: 1, y: 0 };
+    if(!nd) return;
+    e.preventDefault();
+    begin();
+    if(nd.x !== -dir.x || nd.y !== -dir.y){ nextDir = nd; }
+  }
+  document.addEventListener('keydown', keyHandler);
+  activeGameCleanup = () => { running = false; clearInterval(timer); document.removeEventListener('keydown', keyHandler); };
+
+  draw();
+}
+
+/* ---------- 2048 ---------- */
+function openTwenty48(){
+  openModal(`
+    <h3>&#129718; 2048</h3>
+    <p class="ttt-status" id="t48Status">Arrow keys or WASD to slide. Merge matching tiles to reach 2048.</p>
+    <canvas id="t48Canvas" width="300" height="300"
+      style="width:100%; max-width:300px; display:block; margin:0 auto; background:var(--void); border:1px solid var(--panel-edge); border-radius:10px; touch-action:none;"></canvas>
+    <div id="t48Controls" style="text-align:center; margin-top:14px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="t48LB" class="lb-live" data-game="twenty48" data-unit="pts">${leaderboardHTML('twenty48','pts')}</div>
+  `);
+
+  const canvas = document.getElementById('t48Canvas');
+  const ctx = canvas.getContext('2d');
+  const N = 4, pad = 8, size = (300 - pad * (N + 1)) / N;
+  const COLORS = {
+    2:'#3a2359', 4:'#4a2d70', 8:'#6a2d70', 16:'#8a2d6a', 32:'#b3306e',
+    64:'#ff4d94', 128:'#e0a800', 256:'#f0b400', 512:'#ffcc33', 1024:'#4deeea', 2048:'#7afcff'
+  };
+  let grid, score, over;
+
+  function reset(){
+    grid = Array.from({ length: N }, () => Array(N).fill(0));
+    score = 0; over = false;
+    addTile(); addTile();
+    draw();
+  }
+  function addTile(){
+    const empty = [];
+    for(let r = 0; r < N; r++) for(let c = 0; c < N; c++) if(grid[r][c] === 0) empty.push([r, c]);
+    if(!empty.length) return;
+    const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+    grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+  }
+  function slide(row){
+    let arr = row.filter(v => v !== 0);
+    for(let i = 0; i < arr.length - 1; i++){
+      if(arr[i] === arr[i + 1]){ arr[i] *= 2; score += arr[i]; arr[i + 1] = 0; }
+    }
+    arr = arr.filter(v => v !== 0);
+    while(arr.length < N) arr.push(0);
+    return arr;
+  }
+  function rotate(g){
+    const n = g.length;
+    const res = Array.from({ length: n }, () => Array(n).fill(0));
+    for(let r = 0; r < n; r++) for(let c = 0; c < n; c++) res[c][n - 1 - r] = g[r][c];
+    return res;
+  }
+  function move(dir){
+    if(over) return;
+    let g = grid.map(row => row.slice());
+    const rot = { left: 0, up: 3, right: 2, down: 1 }[dir];
+    for(let i = 0; i < rot; i++) g = rotate(g);
+    g = g.map(row => slide(row));
+    for(let i = 0; i < (4 - rot) % 4; i++) g = rotate(g);
+    const changed = JSON.stringify(g) !== JSON.stringify(grid);
+    if(changed){
+      grid = g;
+      addTile();
+      draw();
+      if(isOver()){ over = true; endGame(); }
+    }
+  }
+  function isOver(){
+    for(let r = 0; r < N; r++) for(let c = 0; c < N; c++){
+      if(grid[r][c] === 0) return false;
+      if(c < N - 1 && grid[r][c] === grid[r][c + 1]) return false;
+      if(r < N - 1 && grid[r][c] === grid[r + 1][c]) return false;
+    }
+    return true;
+  }
+  function draw(){
+    ctx.clearRect(0, 0, 300, 300);
+    for(let r = 0; r < N; r++){
+      for(let c = 0; c < N; c++){
+        const x = pad + c * (size + pad), y = pad + r * (size + pad);
+        const v = grid[r][c];
+        ctx.fillStyle = v ? (COLORS[v] || '#7afcff') : 'rgba(255,255,255,0.05)';
+        ctx.fillRect(x, y, size, size);
+        if(v){
+          ctx.fillStyle = v <= 4 ? '#f5f0ff' : '#12091f';
+          ctx.font = 'bold ' + (v >= 1024 ? 20 : 26) + 'px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(v, x + size / 2, y + size / 2 + 1);
+        }
+      }
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    document.getElementById('t48Status').textContent = 'Score: ' + score;
+  }
+
+  function endGame(){
+    document.getElementById('t48Status').textContent = 'No moves left — score: ' + score;
+    const record = isNewRecord('twenty48', score, false);
+    awardCoins(Math.min(40, Math.floor(score / 40)));
+    document.getElementById('t48Controls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="t48Name" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="t48Save">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="t48Restart">Play Again</button>
+      </div>`;
+    document.getElementById('t48Save').addEventListener('click', async () => {
+      const name = document.getElementById('t48Name').value.trim() || 'Anonymous';
+      await saveScore('twenty48', name, score, false);
+      document.getElementById('t48LB').innerHTML = leaderboardHTML('twenty48','pts');
+      document.getElementById('t48Save').disabled = true;
+    });
+    document.getElementById('t48Restart').addEventListener('click', () => {
+      document.getElementById('t48Controls').innerHTML = '';
+      reset();
+    });
+  }
+
+  function keyHandler(e){
+    let dir = null;
+    if(e.code === 'ArrowUp' || e.code === 'KeyW') dir = 'up';
+    else if(e.code === 'ArrowDown' || e.code === 'KeyS') dir = 'down';
+    else if(e.code === 'ArrowLeft' || e.code === 'KeyA') dir = 'left';
+    else if(e.code === 'ArrowRight' || e.code === 'KeyD') dir = 'right';
+    if(!dir) return;
+    e.preventDefault();
+    move(dir);
+  }
+  document.addEventListener('keydown', keyHandler);
+  activeGameCleanup = () => { document.removeEventListener('keydown', keyHandler); };
+
+  reset();
+}
+
+/* ---------- Flappy Neon ---------- */
+function openFlappy(){
+  openModal(`
+    <h3>&#128036; Flappy Neon</h3>
+    <p class="ttt-status" id="flapStatus">Click, tap, or press Space to flap. Thread the gaps.</p>
+    <canvas id="flapCanvas" width="320" height="360"
+      style="width:100%; max-width:320px; display:block; margin:0 auto; background:var(--void); border:1px solid var(--panel-edge); border-radius:10px; touch-action:none; cursor:pointer;"></canvas>
+    <div id="flapControls" style="text-align:center; margin-top:14px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="flapLB" class="lb-live" data-game="flappy" data-unit="pts">${leaderboardHTML('flappy','pts')}</div>
+  `);
+
+  const canvas = document.getElementById('flapCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = 320, H = 360;
+  const gravity = 0.5, flapV = -7.4, pipeW = 46, gapH = 120, pipeSpeed = 2.2;
+  const birdColor = '#ffcc33', pipeColor = '#4deeea';
+  let birdY, vy, pipes, score, started, running, rafId, spawnTimer;
+
+  function reset(){
+    birdY = H / 2; vy = 0; pipes = []; score = 0;
+    started = false; running = false; spawnTimer = 0;
+  }
+  reset();
+
+  function spawnPipe(){
+    const gapY = 50 + Math.random() * (H - gapH - 100);
+    pipes.push({ x: W, gapY, passed: false });
+  }
+
+  function update(){
+    vy += gravity;
+    birdY += vy;
+    spawnTimer--;
+    if(spawnTimer <= 0){ spawnPipe(); spawnTimer = 95; }
+    pipes.forEach(p => { p.x -= pipeSpeed; });
+    pipes = pipes.filter(p => p.x + pipeW > 0);
+
+    const bx = 70, br = 12;
+    for(const p of pipes){
+      if(!p.passed && p.x + pipeW < bx){ p.passed = true; score++; awardCoins(1); }
+      const inX = bx + br > p.x && bx - br < p.x + pipeW;
+      if(inX && (birdY - br < p.gapY || birdY + br > p.gapY + gapH)){ gameOver(); return; }
+    }
+    if(birdY + br > H || birdY - br < 0){ gameOver(); }
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = pipeColor;
+    for(const p of pipes){
+      ctx.fillRect(p.x, 0, pipeW, p.gapY);
+      ctx.fillRect(p.x, p.gapY + gapH, pipeW, H - p.gapY - gapH);
+    }
+    ctx.fillStyle = birdColor;
+    ctx.beginPath(); ctx.arc(70, birdY, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f5f0ff';
+    ctx.font = '16px "JetBrains Mono", monospace';
+    ctx.fillText(score, W / 2 - 5, 30);
+    if(!started){
+      ctx.font = '13px "JetBrains Mono", monospace';
+      ctx.fillStyle = 'rgba(245,240,255,0.85)';
+      ctx.fillText('Tap / Space to start', 90, H / 2 - 30);
+    }
+  }
+
+  function loop(){
+    if(!running) return;
+    update();
+    if(running) draw();
+    if(running) rafId = requestAnimationFrame(loop);
+  }
+
+  function flap(){
+    if(!started){ started = true; running = true; loop(); }
+    if(running){ vy = flapV; }
+  }
+
+  function gameOver(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    draw();
+    document.getElementById('flapStatus').textContent = 'Down — score: ' + score;
+    const record = isNewRecord('flappy', score, false);
+    document.getElementById('flapControls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="flapName" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="flapSave">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="flapRestart">Play Again</button>
+      </div>`;
+    document.getElementById('flapSave').addEventListener('click', async () => {
+      const name = document.getElementById('flapName').value.trim() || 'Anonymous';
+      await saveScore('flappy', name, score, false);
+      document.getElementById('flapLB').innerHTML = leaderboardHTML('flappy','pts');
+      document.getElementById('flapSave').disabled = true;
+    });
+    document.getElementById('flapRestart').addEventListener('click', () => {
+      reset();
+      document.getElementById('flapControls').innerHTML = '';
+      document.getElementById('flapStatus').textContent = 'Click, tap, or press Space to flap.';
+      draw();
+    });
+  }
+
+  function keyHandler(e){ if(e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); flap(); } }
+  document.addEventListener('keydown', keyHandler);
+  canvas.addEventListener('mousedown', flap);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); flap(); });
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(rafId); document.removeEventListener('keydown', keyHandler); };
+
+  draw();
 }
 
 /* ---------- Spin The Wheel ---------- */
