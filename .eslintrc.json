@@ -1,0 +1,18 @@
+{
+  "root": true,
+  "env": { "es2022": true, "node": true },
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module" },
+  "extends": "eslint:recommended",
+  "rules": {
+    "no-unused-vars": ["warn", { "args": "none", "caughtErrors": "none" }],
+    "no-console": "off"
+  },
+  "overrides": [
+    {
+      "files": ["public/**/*.js"],
+      "env": { "browser": true, "node": false },
+      "parserOptions": { "sourceType": "script" },
+      "globals": { "io": "readonly", "ArcadeNet": "writable" }
+    }
+  ]
+}
