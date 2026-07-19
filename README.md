@@ -19,6 +19,18 @@ A neon, player-built arcade you host yourself. Play a floor full of mini-games, 
 - **Coins, prize wheel, and themes** — per-player progress saved locally in the browser.
 - **The Oracle** — answer a few questions and get matched to a cabinet.
 
+## Get a permanent link (deploy for free)
+
+The `trycloudflare` link is temporary. For an always-on URL that never changes, deploy the repo — this repo ships a `render.yaml` blueprint:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/jasmineyuan609/arcade-floor)
+
+1. Click the button, sign in to [Render](https://render.com) (free), and approve the blueprint.
+2. Render builds and hosts it, giving you a fixed URL like `https://arcade-floor.onrender.com` that you can share any time.
+3. (Optional) Point a custom domain (e.g. one you buy from Namecheap/Cloudflare) at the Render service to get a name like `arcade-time.com`.
+
+Railway/Fly.io work too — any host that runs `npm install` + `npm start` and provides a `PORT` env var.
+
 ## Tech
 
 - **Backend:** Node.js, [Express](https://expressjs.com/) (static hosting + REST API), [Socket.IO](https://socket.io/) (presence + real-time multiplayer).
