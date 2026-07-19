@@ -2875,10 +2875,10 @@ function openHoops(){
   const ctx = canvas.getContext('2d');
   const R = 16, GRAV = 0.4, MAXPULL = 150, LAUNCH = 0.16;
   const rim = { x: W/2, y: 130, w: 74 };
-  let ball, flying, score, timeLeft, running, raf, timer, dragging, aim, scoredThisShot, moveHoop, hoopDir;
+  let ball, flying, score, timeLeft, running, raf, timer, dragging, aim, scoredThisShot, moveHoop, hoopDir, swish, splash;
 
   function resetBall(){ ball = { x: W/2, y: H - 130, vx: 0, vy: 0 }; flying = false; scoredThisShot = false; aim = null; }
-  function reset(){ resetBall(); score = 0; timeLeft = 30; running = true; moveHoop = false; hoopDir = 1; dragging = false; }
+  function reset(){ resetBall(); score = 0; timeLeft = 30; running = true; moveHoop = false; hoopDir = 1; dragging = false; swish = 0; splash = []; }
   reset();
 
   // Clamp the pointer to a max pull distance from the ball so aiming can never leave the court.
@@ -2906,10 +2906,17 @@ function openHoops(){
       // score: passing down through rim plane within rim width
       if(!scoredThisShot && ball.vy > 0 && Math.abs(ball.x - rim.x) < rim.w/2 - 6 && ball.y > rim.y && ball.y < rim.y + 18){
         scoredThisShot = true; score += 2; awardCoins(1);
+        // guide the ball cleanly through the rim so it visibly drops in
+        ball.x = rim.x; ball.vx *= 0.25; if(ball.vy < 3) ball.vy = 3;
+        swish = 32;
+        for(let i = 0; i < 14; i++){ splash.push({ x: rim.x, y: rim.y + 4, vx: (Math.random()-0.5)*4, vy: Math.random()*2+1, life: 1 }); }
         if(score >= 10 && !moveHoop) moveHoop = true;
       }
       if(ball.y > H + 40 || (ball.y > H - R && Math.abs(ball.vx) < 0.2 && Math.abs(ball.vy) < 0.2)) resetBall();
     }
+    if(swish > 0) swish--;
+    splash.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life -= 0.04; });
+    splash = splash.filter(p => p.life > 0);
   }
 
   function draw(){
@@ -2920,9 +2927,16 @@ function openHoops(){
     // rim
     ctx.strokeStyle = '#fb7185'; ctx.lineWidth = 5; ctx.shadowColor = '#fb7185'; ctx.shadowBlur = 12;
     ctx.beginPath(); ctx.moveTo(rim.x - rim.w/2, rim.y); ctx.lineTo(rim.x + rim.w/2, rim.y); ctx.stroke();
-    // net
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1;
-    for(let i = 0; i <= 6; i++){ const x = rim.x - rim.w/2 + i*(rim.w/6); ctx.beginPath(); ctx.moveTo(x, rim.y); ctx.lineTo(rim.x - rim.w/4 + i*(rim.w/12), rim.y + 26); ctx.stroke(); }
+    // net (bulges + sways during a swish)
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1;
+    const bulge = swish > 0 ? 16 * Math.sin((swish/32) * Math.PI) : 0;
+    const sway = swish > 0 ? Math.sin(swish * 0.9) * 4 : 0;
+    const netLen = 26 + bulge;
+    for(let i = 0; i <= 6; i++){
+      const x = rim.x - rim.w/2 + i*(rim.w/6);
+      const bx = rim.x - rim.w/4 + i*(rim.w/12) + sway;
+      ctx.beginPath(); ctx.moveTo(x, rim.y); ctx.quadraticCurveTo((x+bx)/2, rim.y + netLen*0.6, bx, rim.y + netLen); ctx.stroke();
+    }
     ctx.shadowBlur = 0;
     // aim: pull-back marker + trajectory preview + power meter
     if(dragging && aim){
@@ -2949,6 +2963,15 @@ function openHoops(){
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ball.x, ball.y, R, 0, Math.PI*2); ctx.fill();
     ctx.strokeStyle = '#7c2d12'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ball.x, ball.y, R, 0, Math.PI*2); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(ball.x - R, ball.y); ctx.lineTo(ball.x + R, ball.y); ctx.moveTo(ball.x, ball.y - R); ctx.lineTo(ball.x, ball.y + R); ctx.stroke();
+    // splash particles
+    for(const p of splash){ ctx.fillStyle = 'rgba(251,113,133,' + Math.max(0, p.life) + ')'; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2); ctx.fill(); }
+    // SWISH! banner
+    if(swish > 0){
+      ctx.globalAlpha = Math.min(1, swish/16);
+      ctx.fillStyle = '#fde047'; ctx.font = 'bold 26px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('SWISH! +2', rim.x, rim.y - 24 - (32 - swish) * 0.6);
+      ctx.globalAlpha = 1; ctx.textAlign = 'left';
+    }
   }
 
   function frame(){ update(); draw(); raf = requestAnimationFrame(frame); }
