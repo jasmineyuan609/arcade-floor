@@ -24,8 +24,11 @@ const BUILTIN_GAMES = [
   { id:'simon', title:'Neon Simon', creator:'The Floor', pitch:'Watch the pattern light up, then play it back. Each round adds one more — how long is your memory?', emoji:'🎵', pace:'slow', type:'puzzle', players:'solo', difficulty:'medium', accent:'pink', builtin:true },
   { id:'color-rush', title:'Color Rush', creator:'The Floor', pitch:'A color flashes, four buttons appear — smash the right one before the clock runs out.', emoji:'🎨', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true, lockable:true },
   { id:'mole-smash', title:'Mole Smash', creator:'The Floor', pitch:'Nine holes, one mole, nowhere near enough time. Tap it before it ducks.', emoji:'🐹', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true, lockable:true },
+  { id:'skytower', title:'Sky Tower', creator:'The Floor', pitch:'Climb an endless tower of floating platforms without falling — a neon Tower-of-Hell obby. The higher you go, the trickier the jumps.', emoji:'🗼', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'green', builtin:true },
+  { id:'clicker', title:'Cash Clicker', creator:'The Floor', pitch:'Tap to earn cash, then buy upgrades and auto-earners to get rich while idle — a simulator-style grind. Your progress saves.', emoji:'💰', pace:'slow', type:'idle', players:'solo', difficulty:'easy', accent:'yellow', builtin:true },
   { id:'tetris', title:'Neon Blocks', creator:'The Floor', pitch:'Rotate and slot the falling shapes to clear full lines. It only gets faster. Unlock it from the Wheel.', emoji:'🟦', pace:'fast', type:'puzzle', players:'solo', difficulty:'hard', accent:'cyan', builtin:true, lockable:true },
   { id:'asteroids', title:'Astro Drift', creator:'The Floor', pitch:'Spin, thrust, and blast the drifting rocks before they hit you. They split when you shoot them. Unlock it from the Wheel.', emoji:'☄️', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true, lockable:true },
+  { id:'disaster', title:'Disaster Dash', creator:'The Floor', pitch:'Survive a neon arena as meteors rain down and the ground erupts — dodge everything as long as you can. Unlock it from the Wheel.', emoji:'🌋', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true, lockable:true },
 ];
 
 const THEMES = [
@@ -327,6 +330,9 @@ function openBuiltinGame(id){
   if(id === 'simon') return openNeonSimon();
   if(id === 'tetris') return openNeonTetris();
   if(id === 'asteroids') return openAstroDrift();
+  if(id === 'skytower') return openSkyTower();
+  if(id === 'clicker') return openCashClicker();
+  if(id === 'disaster') return openDisasterDash();
 }
 
 /* ---------- Reflex Tap ---------- */
@@ -3892,6 +3898,307 @@ function openAstroDrift(){
   }
   function onKeyDown(e){ if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault(); keys[e.key] = true; if(e.key === ' ') fire(); }
   function onKeyUp(e){ keys[e.key] = false; }
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
+  reset();
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); };
+}
+
+/* ---------- Sky Tower (vertical obby climb) ---------- */
+function openSkyTower(){
+  const W = 360, H = 480;
+  const GRAV = 0.62, JUMP = -12.2, MOVE = 3.9, PW = 22, PH = 26;
+  openModal(`
+    <h3>&#128508; Sky Tower</h3>
+    <p class="ttt-status" id="skStatus">&larr; &rarr; move, &uarr; / Space to jump. Climb as high as you can — don't fall off the bottom.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="skCanvas" width="${W}" height="${H}" style="max-width:100%; background:linear-gradient(180deg,#0a1030,#141a3a,#05070f); border:1px solid var(--panel-edge); border-radius:10px;"></canvas>
+    </div>
+    <div id="skEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest climb wins</h4>
+    <div id="skLB" class="lb-live" data-game="skytower" data-unit="pts">${leaderboardHTML('skytower','pts')}</div>
+  `);
+  const canvas = document.getElementById('skCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('skStatus');
+  let plats, player, cameraY, score, running, raf, keys;
+
+  function makePlatAbove(y){
+    const gap = 62 + Math.random() * (26 + Math.min(40, score * 0.5)); // widening gaps as you climb
+    const w = 96 - Math.min(46, score * 0.6); // narrowing platforms as you climb
+    const x = 10 + Math.random() * (W - 20 - w);
+    return { x, y: y - gap, w: Math.max(48, w), moving: score > 12 && Math.random() < 0.35, dir: Math.random() < 0.5 ? 1 : -1, sp: 0.8 + Math.random() };
+  }
+  function reset(){
+    plats = [{ x: W/2 - 60, y: H - 40, w: 120, moving:false, dir:1, sp:0 }];
+    let y = H - 40;
+    for(let i = 0; i < 12; i++){ const p = makePlatAbove(y); plats.push(p); y = p.y; }
+    player = { x: W/2 - PW/2, y: H - 40 - PH, vx:0, vy:0, onGround:true };
+    cameraY = 0; score = 0; running = true; keys = {};
+    document.getElementById('skEnd').innerHTML = '';
+    statusEl.textContent = 'Climb! ← → move, ↑ / Space jump.';
+    raf = requestAnimationFrame(frame);
+  }
+  function frame(){
+    if(!running) return;
+    if(keys['ArrowLeft']) player.vx = -MOVE;
+    else if(keys['ArrowRight']) player.vx = MOVE;
+    else player.vx = 0;
+    player.vy += GRAV;
+    player.x += player.vx;
+    if(player.x < 0) player.x = 0;
+    if(player.x + PW > W) player.x = W - PW;
+    // move platforms
+    for(const p of plats){ if(p.moving){ p.x += p.dir * p.sp; if(p.x < 6 || p.x + p.w > W - 6) p.dir *= -1; } }
+    const prevBottom = player.y + PH;
+    player.y += player.vy;
+    player.onGround = false;
+    if(player.vy >= 0){
+      for(const p of plats){
+        if(player.x + PW > p.x && player.x < p.x + p.w){
+          const bottom = player.y + PH;
+          if(prevBottom <= p.y + 6 && bottom >= p.y){
+            player.y = p.y - PH; player.vy = 0; player.onGround = true;
+            if(p.moving) player.x += p.dir * p.sp;
+          }
+        }
+      }
+    }
+    // camera follows upward only
+    const target = player.y - H * 0.55;
+    if(target < cameraY) cameraY = target;
+    const climb = Math.max(0, Math.floor((H - 40 - PH - player.y) / 12));
+    if(climb > score){ score = climb; statusEl.textContent = 'Height: ' + score; }
+    // generate more platforms above
+    let top = plats.reduce((m, p) => Math.min(m, p.y), Infinity);
+    while(top > cameraY - 80){ const p = makePlatAbove(top); plats.push(p); top = p.y; }
+    plats = plats.filter(p => p.y < cameraY + H + 40);
+    // fell off bottom
+    if(player.y > cameraY + H){ over(); return; }
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(const p of plats){
+      const y = p.y - cameraY;
+      if(y < -20 || y > H + 20) continue;
+      ctx.fillStyle = p.moving ? '#f472b6' : '#4ade80';
+      ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10;
+      ctx.fillRect(p.x, y, p.w, 12);
+      ctx.shadowBlur = 0;
+    }
+    const py = player.y - cameraY;
+    ctx.fillStyle = '#4deeea'; ctx.shadowColor = '#4deeea'; ctx.shadowBlur = 12;
+    ctx.fillRect(player.x, py, PW, PH); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#05070f'; ctx.fillRect(player.x + 4, py + 7, 4, 4); ctx.fillRect(player.x + PW - 8, py + 7, 4, 4);
+    ctx.fillStyle = 'rgba(245,240,255,0.92)'; ctx.font = '14px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('Height: ' + score, 12, 22);
+  }
+  function over(){
+    running = false; cancelAnimationFrame(raf);
+    const coins = Math.min(45, Math.floor(score / 4));
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = 'You fell! Height reached: ' + score;
+    document.getElementById('skEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('skytower', score);
+    wireScoreEntry('skytower', score, 'skLB', reset);
+  }
+  function jump(){ if(player && player.onGround){ player.vy = JUMP; player.onGround = false; } }
+  function onKeyDown(e){
+    if(['ArrowLeft','ArrowRight','ArrowUp',' '].includes(e.key)) e.preventDefault();
+    keys[e.key] = true;
+    if(e.key === 'ArrowUp' || e.key === ' ') jump();
+  }
+  function onKeyUp(e){ keys[e.key] = false; }
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
+  reset();
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); };
+}
+
+/* ---------- Cash Clicker (idle simulator) ---------- */
+function openCashClicker(){
+  const KEY = 'arcade-floor-clicker';
+  const UPGRADES = [
+    { id:'tap', name:'Stronger Taps', desc:'+1 cash per tap', base:15, mul:1.5, icon:'👆' },
+    { id:'auto', name:'Auto Miner', desc:'+1 cash / sec', base:60, mul:1.55, icon:'⛏️' },
+    { id:'boost', name:'Neon Boost', desc:'×2 all income', base:750, mul:4, icon:'⚡' },
+  ];
+  let sv = { cash:0, total:0, lv:{ tap:0, auto:0, boost:0 } };
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.lv) sv = s; } catch(e){ /* fresh */ }
+
+  openModal(`
+    <h3>&#128176; Cash Clicker</h3>
+    <p class="ttt-status" id="ccStatus">Tap the coin to earn cash. Buy upgrades to earn faster — even while idle. Progress saves automatically.</p>
+    <div style="text-align:center; margin:6px 0 12px;">
+      <div id="ccCash" style="font-size:30px; font-weight:800; color:var(--yellow);"></div>
+      <div id="ccRates" style="font-size:12px; color:var(--muted); margin-top:2px;"></div>
+    </div>
+    <div style="display:flex; justify-content:center; margin-bottom:14px;">
+      <button id="ccCoin" style="width:120px; height:120px; border-radius:50%; border:none; cursor:pointer; font-size:52px;
+        background:radial-gradient(circle at 40% 35%, #ffe07a, #d4a017); box-shadow:0 0 26px #f5c04255; transition:transform .05s;">🪙</button>
+    </div>
+    <div id="ccShop" style="display:flex; flex-direction:column; gap:8px;"></div>
+    <div id="ccEnd" style="text-align:center; margin-top:14px;"></div>
+    <h4>Top 10 — most cash earned wins</h4>
+    <div id="ccLB" class="lb-live" data-game="clicker" data-unit="pts">${leaderboardHTML('clicker','pts')}</div>
+  `);
+  const cashEl = document.getElementById('ccCash');
+  const ratesEl = document.getElementById('ccRates');
+  const shopEl = document.getElementById('ccShop');
+  const coinBtn = document.getElementById('ccCoin');
+
+  function mult(){ return Math.pow(2, sv.lv.boost); }
+  function perTap(){ return (1 + sv.lv.tap) * mult(); }
+  function perSec(){ return sv.lv.auto * mult(); }
+  function costOf(u){ return Math.floor(u.base * Math.pow(u.mul, sv.lv[u.id])); }
+  function fmt(n){
+    if(n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+    if(n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+    if(n >= 1e3) return (n/1e3).toFixed(2) + 'K';
+    return Math.floor(n).toString();
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(sv)); } catch(e){ /* ignore */ } }
+  function render(){
+    cashEl.textContent = '$' + fmt(sv.cash);
+    ratesEl.textContent = `${fmt(perTap())} / tap • ${fmt(perSec())} / sec • total earned $${fmt(sv.total)}`;
+    shopEl.innerHTML = UPGRADES.map(u => {
+      const cost = costOf(u);
+      const afford = sv.cash >= cost;
+      return `<button class="btn btn-small ${afford ? 'btn-primary' : 'btn-ghost'}" data-up="${u.id}" ${afford ? '' : 'disabled'}
+        style="display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left;">
+        <span>${u.icon} <b>${u.name}</b> <span style="color:var(--muted);">Lv ${sv.lv[u.id]} — ${u.desc}</span></span>
+        <span>$${fmt(cost)}</span></button>`;
+    }).join('');
+    shopEl.querySelectorAll('[data-up]').forEach(b => b.addEventListener('click', () => buy(b.dataset.up)));
+  }
+  function buy(id){
+    const u = UPGRADES.find(x => x.id === id);
+    const cost = costOf(u);
+    if(sv.cash < cost) return;
+    sv.cash -= cost; sv.lv[id]++; save(); render();
+  }
+  function tap(){
+    const gain = perTap();
+    sv.cash += gain; sv.total += gain;
+    coinBtn.style.transform = 'scale(0.92)';
+    setTimeout(() => { coinBtn.style.transform = 'scale(1)'; }, 60);
+    render();
+  }
+  coinBtn.addEventListener('click', tap);
+  const auto = setInterval(() => { const g = perSec() / 10; if(g > 0){ sv.cash += g; sv.total += g; render(); } }, 100);
+  const saver = setInterval(save, 3000);
+  document.getElementById('ccEnd').innerHTML = `
+    <button class="btn btn-small btn-primary" id="ccSubmit">Submit total to leaderboard</button>
+    <button class="btn btn-small btn-ghost" id="ccReset">Reset save</button>`;
+  document.getElementById('ccSubmit').addEventListener('click', () => {
+    const score = Math.floor(sv.total);
+    document.getElementById('ccEnd').innerHTML = coinToastHTML(0) + scoreEntryHTML('clicker', score);
+    document.getElementById('seAgain').textContent = 'Keep playing';
+    wireScoreEntry('clicker', score, 'ccLB', () => { document.getElementById('ccEnd').innerHTML = `
+      <button class="btn btn-small btn-primary" id="ccSubmit2">Submit total to leaderboard</button>`;
+      document.getElementById('ccSubmit2').addEventListener('click', () => { openCashClicker(); }); });
+  });
+  document.getElementById('ccReset').addEventListener('click', () => {
+    sv = { cash:0, total:0, lv:{ tap:0, auto:0, boost:0 } }; save(); render();
+  });
+  render();
+  activeGameCleanup = () => { clearInterval(auto); clearInterval(saver); save(); };
+}
+
+/* ---------- Disaster Dash (survival) ---------- */
+function openDisasterDash(){
+  const W = 420, H = 420, PR = 11, SPD = 3.4;
+  openModal(`
+    <h3>&#127755; Disaster Dash</h3>
+    <p class="ttt-status" id="ddStatus">Move with Arrow keys / WASD. Survive the falling meteors and ground eruptions as long as you can.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="ddCanvas" width="${W}" height="${H}" style="max-width:100%; background:radial-gradient(circle at 50% 50%,#161326,#08060f); border:1px solid var(--panel-edge); border-radius:10px;"></canvas>
+    </div>
+    <div id="ddEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — longest survival wins</h4>
+    <div id="ddLB" class="lb-live" data-game="disaster" data-unit="pts">${leaderboardHTML('disaster','pts')}</div>
+  `);
+  const canvas = document.getElementById('ddCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('ddStatus');
+  let player, warns, blasts, running, raf, keys, startT, elapsed, spawnAcc, lastT;
+
+  function reset(){
+    player = { x: W/2, y: H/2 };
+    warns = []; blasts = []; keys = {}; running = true;
+    startT = performance.now(); lastT = startT; elapsed = 0; spawnAcc = 0;
+    document.getElementById('ddEnd').innerHTML = '';
+    statusEl.textContent = 'Survive! Arrow keys / WASD to move.';
+    raf = requestAnimationFrame(frame);
+  }
+  function spawnMeteor(){
+    const r = 26 + Math.random() * 22;
+    const x = r + Math.random() * (W - 2*r), y = r + Math.random() * (H - 2*r);
+    warns.push({ x, y, r, t: Math.max(38, 78 - elapsed * 1.2) }); // warning shorter over time
+  }
+  function frame(t){
+    if(!running) return;
+    const dt = t - lastT; lastT = t;
+    elapsed = (t - startT) / 1000;
+    const mv = SPD;
+    if(keys['ArrowLeft'] || keys['a']) player.x -= mv;
+    if(keys['ArrowRight'] || keys['d']) player.x += mv;
+    if(keys['ArrowUp'] || keys['w']) player.y -= mv;
+    if(keys['ArrowDown'] || keys['s']) player.y += mv;
+    player.x = Math.max(PR, Math.min(W - PR, player.x));
+    player.y = Math.max(PR, Math.min(H - PR, player.y));
+    // spawn rate ramps up
+    spawnAcc += dt;
+    const interval = Math.max(260, 900 - elapsed * 28);
+    if(spawnAcc >= interval){ spawnAcc = 0; spawnMeteor(); if(elapsed > 15) spawnMeteor(); }
+    // warnings countdown -> blast
+    for(let i = warns.length - 1; i >= 0; i--){
+      warns[i].t--;
+      if(warns[i].t <= 0){ blasts.push({ x:warns[i].x, y:warns[i].y, r:warns[i].r, life:18 }); warns.splice(i, 1); }
+    }
+    // blasts hurt for a short window
+    for(let i = blasts.length - 1; i >= 0; i--){
+      const b = blasts[i];
+      if(b.life > 8){
+        const dx = player.x - b.x, dy = player.y - b.y;
+        if(dx*dx + dy*dy < (b.r + PR)*(b.r + PR)){ over(); return; }
+      }
+      b.life--;
+      if(b.life <= 0) blasts.splice(i, 1);
+    }
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(const wn of warns){
+      ctx.strokeStyle = 'rgba(248,113,113,0.7)'; ctx.lineWidth = 2; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.arc(wn.x, wn.y, wn.r, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(248,113,113,0.12)'; ctx.beginPath(); ctx.arc(wn.x, wn.y, wn.r, 0, Math.PI*2); ctx.fill();
+    }
+    for(const b of blasts){
+      const a = b.life / 18;
+      ctx.fillStyle = `rgba(255,${Math.floor(140*a)},60,${0.85*a + 0.15})`;
+      ctx.shadowColor = '#ff7a2a'; ctx.shadowBlur = 20;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = '#4deeea'; ctx.shadowColor = '#4deeea'; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(player.x, player.y, PR, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(245,240,255,0.92)'; ctx.font = '15px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('Time: ' + elapsed.toFixed(1) + 's', 12, 24);
+  }
+  function over(){
+    running = false; cancelAnimationFrame(raf);
+    const score = Math.floor(elapsed);
+    const coins = Math.min(45, score);
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = 'Wiped out! You survived ' + elapsed.toFixed(1) + 's.';
+    document.getElementById('ddEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('disaster', score);
+    wireScoreEntry('disaster', score, 'ddLB', reset);
+  }
+  function onKeyDown(e){ if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault(); keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true; }
+  function onKeyUp(e){ keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; }
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);
   reset();
