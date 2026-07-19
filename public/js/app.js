@@ -20,8 +20,12 @@ const BUILTIN_GAMES = [
   { id:'shooter', title:'Star Blaster', creator:'The Floor', pitch:'A neon space shooter — dodge and blast waves of invaders before they reach you. Explosions included.', emoji:'🚀', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true },
   { id:'hoops', title:'Hoops', creator:'The Floor', pitch:'Flick to shoot with real arc physics. Drain as many buckets as you can before the clock runs out.', emoji:'🏀', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true },
   { id:'racer', title:'Traffic Racer', creator:'The Floor', pitch:'Weave your car through endless traffic at increasing speed. One crash ends the run.', emoji:'🏎️', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'green', builtin:true },
+  { id:'stacker', title:'Tower Stack', creator:'The Floor', pitch:'Time your taps to stack the sliding blocks into a towering skyscraper. Miss and the overhang gets sliced off.', emoji:'🏗️', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true },
+  { id:'simon', title:'Neon Simon', creator:'The Floor', pitch:'Watch the pattern light up, then play it back. Each round adds one more — how long is your memory?', emoji:'🎵', pace:'slow', type:'puzzle', players:'solo', difficulty:'medium', accent:'pink', builtin:true },
   { id:'color-rush', title:'Color Rush', creator:'The Floor', pitch:'A color flashes, four buttons appear — smash the right one before the clock runs out.', emoji:'🎨', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true, lockable:true },
   { id:'mole-smash', title:'Mole Smash', creator:'The Floor', pitch:'Nine holes, one mole, nowhere near enough time. Tap it before it ducks.', emoji:'🐹', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true, lockable:true },
+  { id:'tetris', title:'Neon Blocks', creator:'The Floor', pitch:'Rotate and slot the falling shapes to clear full lines. It only gets faster. Unlock it from the Wheel.', emoji:'🟦', pace:'fast', type:'puzzle', players:'solo', difficulty:'hard', accent:'cyan', builtin:true, lockable:true },
+  { id:'asteroids', title:'Astro Drift', creator:'The Floor', pitch:'Spin, thrust, and blast the drifting rocks before they hit you. They split when you shoot them. Unlock it from the Wheel.', emoji:'☄️', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true, lockable:true },
 ];
 
 const THEMES = [
@@ -52,7 +56,7 @@ const QUESTIONS = [
 ];
 
 const state = { submittedGames: [], leaderboards: {} };
-const player = { coins: 0, unlockedGames: [], unlockedThemes: ['classic'], theme: 'classic' };
+const player = { coins: 0, unlockedGames: [], unlockedThemes: ['classic'], theme: 'classic', fwProgress: 0 };
 
 /* ================= UTIL ================= */
 
@@ -312,13 +316,17 @@ function openBuiltinGame(id){
   if(id === 'flappy') return openFlappy();
   if(id === 'pong') return openPong();
   if(id === 'blade') return openBladeBall();
-  if(id === 'firewater') return openFireWater();
+  if(id === 'firewater') return openFireWaterMap();
   if(id === 'brick') return openBrickBreaker();
   if(id === 'shooter') return openStarBlaster();
   if(id === 'hoops') return openHoops();
   if(id === 'racer') return openRacer();
   if(id === 'color-rush') return openColorRush();
   if(id === 'mole-smash') return openMoleSmash();
+  if(id === 'stacker') return openTowerStack();
+  if(id === 'simon') return openNeonSimon();
+  if(id === 'tetris') return openNeonTetris();
+  if(id === 'asteroids') return openAstroDrift();
 }
 
 /* ---------- Reflex Tap ---------- */
@@ -2409,6 +2417,38 @@ function fwLevels(){
   ];
 }
 
+function openFireWaterMap(){
+  const levels = fwLevels();
+  const prog = player.fwProgress || 0; // highest unlocked level index (>= levels.length means all cleared)
+  const accents = ['#4ade80', '#facc15', '#f472b6', '#38bdf8'];
+  const nodes = levels.map((lv, i) => {
+    const unlocked = i <= prog;
+    const cleared = i < prog;
+    const badge = cleared ? '&#10003;' : (unlocked ? (i + 1) : '&#128274;');
+    return `
+      <button class="fw-node" data-idx="${i}" ${unlocked ? '' : 'disabled'}
+        style="position:relative;width:130px;height:104px;border-radius:14px;cursor:${unlocked ? 'pointer' : 'not-allowed'};
+        border:2px solid ${unlocked ? accents[i] : 'rgba(120,110,150,0.4)'};
+        background:linear-gradient(160deg, rgba(30,20,55,0.95), rgba(12,9,22,0.95));
+        color:${unlocked ? '#f5f0ff' : 'rgba(200,195,220,0.45)'};display:flex;flex-direction:column;align-items:center;
+        justify-content:center;gap:8px;box-shadow:${unlocked ? '0 0 16px ' + accents[i] + '55' : 'none'};">
+        <div style="font-size:26px;font-weight:700;line-height:1;">${badge}</div>
+        <div style="font-size:12px;letter-spacing:.5px;">${escapeHTML(lv.name)}</div>
+        <div style="font-size:10px;opacity:.7;">${'◆'.repeat(1 + i)}</div>
+      </button>`;
+  }).join('<div style="width:26px;height:2px;background:repeating-linear-gradient(90deg,#6b5b95 0 6px,transparent 6px 12px);align-self:center;"></div>');
+  openModal(`
+    <h3>&#128293;&#128167; Fireboy &amp; Watergirl</h3>
+    <p class="ttt-status">Pick a temple from the map — clear one to unlock the next. Progress saves automatically. Fireboy = Arrow keys, Watergirl = W A D.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:0;justify-content:center;align-items:center;padding:10px 0;">${nodes}</div>
+    <p class="toast" style="text-align:center;color:var(--muted);">Each temple ramps up: more tiers, deadlier pools, and roaming energy orbs to dodge.</p>
+  `);
+  document.querySelectorAll('.fw-node').forEach(b => {
+    if(b.disabled) return;
+    b.addEventListener('click', () => openFireWater(parseInt(b.dataset.idx, 10)));
+  });
+}
+
 function openFireWater(levelIdx){
   const W = FW_W, H = FW_H;
   const levels = fwLevels();
@@ -2435,6 +2475,15 @@ function openFireWater(levelIdx){
   let diamonds = L.diamonds.map(d => ({ ...d }));
   const totalFire = diamonds.filter(d => d.type === 'fire').length;
   const totalWater = diamonds.filter(d => d.type === 'water').length;
+  // Progressive difficulty: later temples add slow roaming energy orbs (deadly to both).
+  const hazards = [];
+  {
+    const tierPlats = platforms.filter(p => p.w <= 160 && p.y > 120 && p.y < 420);
+    for(let i = 0; i < li && i < tierPlats.length; i++){
+      const pl = tierPlats[i];
+      hazards.push({ x: pl.x + 20, y: pl.y - 15, r: 9, min: pl.x + 8, max: pl.x + pl.w - 8, vx: 0.9 + li * 0.2, dir: 1 });
+    }
+  }
   const startTime = performance.now();
   let elapsed = 0;
   let parts = [];
@@ -2534,6 +2583,32 @@ function openFireWater(levelIdx){
     p.atDoor = overlap(p, { x:door.x, y:door.y, w:36, h:48 });
   }
 
+  function updateHazards(){
+    for(const hz of hazards){
+      hz.x += hz.vx * hz.dir;
+      if(hz.x <= hz.min){ hz.x = hz.min; hz.dir = 1; }
+      if(hz.x >= hz.max){ hz.x = hz.max; hz.dir = -1; }
+    }
+    for(const p of [fire, water]){
+      if(!p.alive) continue;
+      for(const hz of hazards){
+        const dx = (p.x + p.w/2) - hz.x, dy = (p.y + p.h/2) - hz.y, rr = hz.r + 11;
+        if(dx*dx + dy*dy < rr*rr){ p.alive = false; deathReason = 'an energy orb'; emit(p.x+p.w/2, p.y+p.h/2, '#c084fc', 16, {spread:4, vy0:-1, vyr:3, grav:0.1, size:3}); }
+      }
+    }
+  }
+
+  function drawHazard(hz){
+    const t = performance.now()/140;
+    ctx.save(); ctx.translate(hz.x, hz.y); ctx.rotate(t);
+    ctx.shadowColor = '#c084fc'; ctx.shadowBlur = 14; ctx.fillStyle = '#a855f7';
+    ctx.beginPath();
+    for(let i = 0; i < 8; i++){ const a = i/8 * Math.PI*2; const r = (i % 2) ? hz.r + 4 : hz.r; ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#f5d0fe'; ctx.beginPath(); ctx.arc(0, 0, hz.r*0.45, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
   function updateParts(){
     for(const q of parts){ q.x += q.vx; q.y += q.vy; q.vy += q.grav; q.life -= q.decay; }
     parts = parts.filter(q => q.life > 0);
@@ -2551,19 +2626,26 @@ function openFireWater(levelIdx){
       const bonus = 10 + (gotF + gotW) * 2 + (all ? 8 : 0);
       awardCoins(bonus);
       const last = li >= levels.length - 1;
+      // Save progress: unlock the next temple.
+      player.fwProgress = Math.max(player.fwProgress || 0, li + 1);
+      persistPlayerState();
       statusEl.textContent = (last ? 'All temples cleared — flawless teamwork! 🎉 ' : `Temple ${li+1} cleared! `) + `Diamonds ${gotF+gotW}/${totalFire+totalWater} • Time ${elapsed.toFixed(1)}s`;
       document.getElementById('fwEnd').innerHTML = coinToastHTML(bonus) +
-        (last ? '<button class="btn btn-small btn-primary" id="fwAgain">Play from start</button>'
-              : '<button class="btn btn-small btn-primary" id="fwNext">Next temple &rarr;</button> <button class="btn btn-small btn-ghost" id="fwAgain">Replay temple</button>');
+        (last ? '' : '<button class="btn btn-small btn-primary" id="fwNext">Next temple &rarr;</button> ') +
+        '<button class="btn btn-small btn-ghost" id="fwAgain">Replay</button> <button class="btn btn-small btn-ghost" id="fwMap">Level map</button>';
       const nxt = document.getElementById('fwNext');
       if(nxt) nxt.addEventListener('click', () => { cleanup(); openFireWater(li + 1); });
       const again = document.getElementById('fwAgain');
-      if(again) again.addEventListener('click', () => { cleanup(); openFireWater(last ? 0 : li); });
+      if(again) again.addEventListener('click', () => { cleanup(); openFireWater(li); });
+      const map = document.getElementById('fwMap');
+      if(map) map.addEventListener('click', () => { cleanup(); openFireWaterMap(); });
     } else {
-      statusEl.textContent = `${deathReason ? 'Someone fell in ' + deathReason : 'Someone touched the wrong element'} — try again!`;
-      document.getElementById('fwEnd').innerHTML = '<button class="btn btn-small btn-primary" id="fwAgain">Try again</button>';
+      statusEl.textContent = `${deathReason ? 'Someone hit ' + deathReason : 'Someone touched the wrong element'} — try again!`;
+      document.getElementById('fwEnd').innerHTML = '<button class="btn btn-small btn-primary" id="fwAgain">Try again</button> <button class="btn btn-small btn-ghost" id="fwMap">Level map</button>';
       const again = document.getElementById('fwAgain');
       if(again) again.addEventListener('click', () => { cleanup(); openFireWater(li); });
+      const map = document.getElementById('fwMap');
+      if(map) map.addEventListener('click', () => { cleanup(); openFireWaterMap(); });
     }
   }
 
@@ -2696,6 +2778,7 @@ function openFireWater(levelIdx){
       ctx.fillStyle = v.on ? '#4ade80' : '#f87171'; ctx.beginPath(); ctx.arc(v.x + v.w/2 + (v.on ? 9 : -9), v.y, 4, 0, Math.PI*2); ctx.fill();
     }
     for(const gm of diamonds) drawDiamond(gm);
+    for(const hz of hazards) drawHazard(hz);
     drawDoor(L.fireDoor, 'fire', fire.atDoor);
     drawDoor(L.waterDoor, 'water', water.atDoor);
     drawParts();
@@ -2715,6 +2798,7 @@ function openFireWater(levelIdx){
     updateMechanisms();
     movePlayer(fire, 'arrowleft', 'arrowright', 'arrowup');
     movePlayer(water, 'a', 'd', 'w');
+    updateHazards();
     updateParts();
     if(!fire.alive || !water.alive){ draw(); endGame(false); return; }
     if(fire.atDoor && water.atDoor){ draw(); endGame(true); return; }
@@ -3378,6 +3462,440 @@ function runRacer(car){
   function cleanup(){ running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', keyHandler); }
   raf = requestAnimationFrame(frame);
   activeGameCleanup = cleanup;
+}
+
+/* ---------- shared score-entry panel ---------- */
+function scoreEntryHTML(gameId, score){
+  const record = isNewRecord(gameId, score, false);
+  return (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:6px;">
+      <input id="seName" placeholder="Your name" maxlength="16" />
+      <button class="btn btn-small btn-primary" id="seSave">Save Score</button>
+      <button class="btn btn-small btn-ghost" id="seAgain">Play Again</button>
+    </div>`;
+}
+function wireScoreEntry(gameId, score, lbId, onAgain){
+  const save = document.getElementById('seSave');
+  if(save) save.addEventListener('click', async () => {
+    const name = (document.getElementById('seName').value || '').trim() || 'Anonymous';
+    await saveScore(gameId, name, score, false);
+    if(lbId) document.getElementById(lbId).innerHTML = leaderboardHTML(gameId, 'pts');
+    save.disabled = true;
+  });
+  const again = document.getElementById('seAgain');
+  if(again) again.addEventListener('click', onAgain);
+}
+
+/* ---------- Tower Stack ---------- */
+function openTowerStack(){
+  const W = 340, H = 460, BH = 26;
+  openModal(`
+    <h3>&#127959;&#65039; Tower Stack</h3>
+    <p class="ttt-status" id="tsStatus">Click, tap, or press Space to drop each sliding block. Line it up — overhang gets sliced off.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="tsCanvas" width="${W}" height="${H}" style="max-width:100%; background:linear-gradient(180deg,#0a1226,#05070f); border:1px solid var(--panel-edge); border-radius:10px; cursor:pointer;"></canvas>
+    </div>
+    <div id="tsEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="tsLB" class="lb-live" data-game="stacker" data-unit="pts">${leaderboardHTML('stacker','pts')}</div>
+  `);
+  const canvas = document.getElementById('tsCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('tsStatus');
+  let stack, current, score, speed, running, raf, camera;
+
+  function reset(){
+    const baseW = 150;
+    stack = [{ x:(W-baseW)/2, w:baseW }];
+    score = 0; speed = 2.4; camera = 0; running = true;
+    spawn();
+    document.getElementById('tsEnd').innerHTML = '';
+    statusEl.textContent = 'Drop the block to stack it. Overhang gets sliced off.';
+    raf = requestAnimationFrame(frame);
+  }
+  function spawn(){
+    const top = stack[stack.length-1];
+    current = { x: 0, w: top.w, dir: 1 };
+  }
+  function drop(){
+    if(!running || !current) return;
+    const top = stack[stack.length-1];
+    const left = Math.max(current.x, top.x);
+    const right = Math.min(current.x + current.w, top.x + top.w);
+    const ov = right - left;
+    if(ov <= 0){ over(); return; }
+    stack.push({ x: left, w: ov });
+    score++;
+    speed = Math.min(6.5, 2.4 + score * 0.12);
+    statusEl.textContent = 'Height: ' + score;
+    spawn();
+  }
+  function frame(){
+    if(!running) return;
+    current.x += speed * current.dir;
+    if(current.x <= 0){ current.x = 0; current.dir = 1; }
+    if(current.x + current.w >= W){ current.x = W - current.w; current.dir = -1; }
+    const targetCam = Math.max(0, (stack.length - 8) * BH);
+    camera += (targetCam - camera) * 0.1;
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function blockY(i){ return H - BH - i * BH + camera; }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(let i = 0; i < stack.length; i++){
+      const b = stack[i], y = blockY(i);
+      if(y > H) continue;
+      const hue = (i * 24) % 360;
+      ctx.fillStyle = `hsl(${hue},70%,55%)`;
+      ctx.shadowColor = `hsl(${hue},70%,55%)`; ctx.shadowBlur = 10;
+      ctx.fillRect(b.x, y, b.w, BH - 2);
+      ctx.shadowBlur = 0;
+    }
+    if(current){
+      const y = blockY(stack.length);
+      ctx.fillStyle = '#f5f0ff'; ctx.shadowColor = '#4deeea'; ctx.shadowBlur = 14;
+      ctx.fillRect(current.x, y, current.w, BH - 2); ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = 'rgba(245,240,255,0.9)'; ctx.font = '14px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('Height: ' + score, 12, 22);
+  }
+  function over(){
+    running = false; cancelAnimationFrame(raf);
+    const coins = Math.min(40, score * 2);
+    awardCoins(coins);
+    statusEl.textContent = 'Toppled! Final height: ' + score;
+    document.getElementById('tsEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('stacker', score);
+    wireScoreEntry('stacker', score, 'tsLB', reset);
+  }
+  function onKey(e){ if(e.key === ' '){ e.preventDefault(); drop(); } }
+  function onClick(){ drop(); }
+  document.addEventListener('keydown', onKey);
+  canvas.addEventListener('mousedown', onClick);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drop(); }, { passive:false });
+  reset();
+  activeGameCleanup = () => {
+    running = false; cancelAnimationFrame(raf);
+    document.removeEventListener('keydown', onKey);
+    canvas.removeEventListener('mousedown', onClick);
+  };
+}
+
+/* ---------- Neon Simon ---------- */
+function openNeonSimon(){
+  const PADS = [
+    { c:'#f43f5e', g:'#fb7185' }, { c:'#22d3ee', g:'#67e8f9' },
+    { c:'#facc15', g:'#fde047' }, { c:'#4ade80', g:'#86efac' },
+  ];
+  openModal(`
+    <h3>&#127925; Neon Simon</h3>
+    <p class="ttt-status" id="smStatus">Watch the pattern, then repeat it. Each round adds one step.</p>
+    <div id="smGrid" style="display:grid; grid-template-columns:repeat(2,1fr); gap:12px; max-width:320px; margin:14px auto;"></div>
+    <div style="text-align:center;"><button class="btn btn-small btn-primary" id="smStart">Start</button></div>
+    <div id="smEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest round wins</h4>
+    <div id="smLB" class="lb-live" data-game="simon" data-unit="pts">${leaderboardHTML('simon','pts')}</div>
+  `);
+  const grid = document.getElementById('smGrid');
+  const statusEl = document.getElementById('smStatus');
+  const pads = PADS.map((p, i) => {
+    const el = document.createElement('button');
+    el.style.cssText = `height:110px; border-radius:14px; border:2px solid rgba(255,255,255,0.12); background:${p.c}; opacity:0.45; cursor:pointer; transition:opacity .1s, box-shadow .1s;`;
+    el.dataset.idx = i;
+    grid.appendChild(el);
+    return el;
+  });
+  let sequence = [], input = [], round = 0, accepting = false, timers = [];
+  function clearTimers(){ timers.forEach(t => clearTimeout(t)); timers = []; }
+  function flash(i, ms){
+    pads[i].style.opacity = '1';
+    pads[i].style.boxShadow = `0 0 22px ${PADS[i].g}`;
+    timers.push(setTimeout(() => { pads[i].style.opacity = '0.45'; pads[i].style.boxShadow = 'none'; }, ms));
+  }
+  function playback(){
+    accepting = false; input = [];
+    statusEl.textContent = `Round ${round} — watch...`;
+    let d = 500;
+    sequence.forEach((idx, k) => {
+      timers.push(setTimeout(() => flash(idx, 350), d * (k + 1)));
+    });
+    timers.push(setTimeout(() => { accepting = true; statusEl.textContent = `Round ${round} — your turn (${sequence.length} steps)`; }, d * (sequence.length + 1)));
+  }
+  function nextRound(){
+    round++;
+    sequence.push(Math.floor(Math.random() * 4));
+    playback();
+  }
+  function press(i){
+    if(!accepting) return;
+    flash(i, 200);
+    input.push(i);
+    const k = input.length - 1;
+    if(input[k] !== sequence[k]){ over(); return; }
+    if(input.length === sequence.length){ accepting = false; timers.push(setTimeout(nextRound, 700)); }
+  }
+  function over(){
+    accepting = false; clearTimers();
+    const score = round - 1;
+    const coins = Math.min(30, score * 3);
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = `Wrong! You reached round ${score}.`;
+    document.getElementById('smEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('simon', score);
+    wireScoreEntry('simon', score, 'smLB', start);
+  }
+  function start(){
+    clearTimers(); sequence = []; round = 0;
+    document.getElementById('smEnd').innerHTML = '';
+    nextRound();
+  }
+  pads.forEach((el, i) => el.addEventListener('click', () => press(i)));
+  document.getElementById('smStart').addEventListener('click', start);
+  activeGameCleanup = () => { clearTimers(); };
+}
+
+/* ---------- Neon Blocks (falling-block puzzle) ---------- */
+function openNeonTetris(){
+  const COLS = 10, ROWS = 18, CELL = 22, W = COLS*CELL, H = ROWS*CELL;
+  const SHAPES = [
+    { m:[[1,1,1,1]], c:'#22d3ee' },
+    { m:[[1,1],[1,1]], c:'#facc15' },
+    { m:[[0,1,0],[1,1,1]], c:'#c084fc' },
+    { m:[[1,0,0],[1,1,1]], c:'#60a5fa' },
+    { m:[[0,0,1],[1,1,1]], c:'#fb923c' },
+    { m:[[0,1,1],[1,1,0]], c:'#4ade80' },
+    { m:[[1,1,0],[0,1,1]], c:'#f43f5e' },
+  ];
+  openModal(`
+    <h3>&#129000; Neon Blocks</h3>
+    <p class="ttt-status" id="ntStatus">&larr; &rarr; move, &uarr; rotate, &darr; soft drop, Space hard drop. Clear lines to score.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="ntCanvas" width="${W}" height="${H}" style="background:#05070f; border:1px solid var(--panel-edge); border-radius:10px;"></canvas>
+    </div>
+    <div id="ntEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="ntLB" class="lb-live" data-game="tetris" data-unit="pts">${leaderboardHTML('tetris','pts')}</div>
+  `);
+  const canvas = document.getElementById('ntCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('ntStatus');
+  let grid, piece, score, lines, running, raf, dropAcc, dropInterval, lastT;
+
+  function newGrid(){ return Array.from({length:ROWS}, () => Array(COLS).fill(null)); }
+  function spawn(){
+    const s = SHAPES[Math.floor(Math.random()*SHAPES.length)];
+    piece = { m: s.m.map(r => r.slice()), c: s.c, x: Math.floor((COLS - s.m[0].length)/2), y: 0 };
+    if(collides(piece.m, piece.x, piece.y)) over();
+  }
+  function collides(m, px, py){
+    for(let r = 0; r < m.length; r++) for(let c = 0; c < m[r].length; c++){
+      if(!m[r][c]) continue;
+      const x = px + c, y = py + r;
+      if(x < 0 || x >= COLS || y >= ROWS) return true;
+      if(y >= 0 && grid[y][x]) return true;
+    }
+    return false;
+  }
+  function merge(){
+    for(let r = 0; r < piece.m.length; r++) for(let c = 0; c < piece.m[r].length; c++){
+      if(piece.m[r][c]){ const y = piece.y + r, x = piece.x + c; if(y >= 0) grid[y][x] = piece.c; }
+    }
+  }
+  function clearLines(){
+    let cleared = 0;
+    for(let r = ROWS-1; r >= 0; r--){
+      if(grid[r].every(v => v)){ grid.splice(r, 1); grid.unshift(Array(COLS).fill(null)); cleared++; r++; }
+    }
+    if(cleared){
+      lines += cleared;
+      score += [0,40,100,300,1200][cleared];
+      dropInterval = Math.max(120, 600 - lines * 18);
+      statusEl.textContent = `Score ${score} • Lines ${lines}`;
+    }
+  }
+  function rotate(){
+    const m = piece.m;
+    const rot = m[0].map((_, i) => m.map(row => row[i]).reverse());
+    if(!collides(rot, piece.x, piece.y)) piece.m = rot;
+    else if(!collides(rot, piece.x-1, piece.y)){ piece.x--; piece.m = rot; }
+    else if(!collides(rot, piece.x+1, piece.y)){ piece.x++; piece.m = rot; }
+  }
+  function move(dx){ if(!collides(piece.m, piece.x+dx, piece.y)) piece.x += dx; }
+  function softDrop(){
+    if(!collides(piece.m, piece.x, piece.y+1)){ piece.y++; return true; }
+    merge(); clearLines(); spawn(); return false;
+  }
+  function hardDrop(){ while(!collides(piece.m, piece.x, piece.y+1)) piece.y++; merge(); clearLines(); spawn(); }
+  function frame(t){
+    if(!running) return;
+    if(!lastT) lastT = t;
+    dropAcc += t - lastT; lastT = t;
+    if(dropAcc >= dropInterval){ dropAcc = 0; softDrop(); }
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function cell(x, y, color){
+    ctx.fillStyle = color; ctx.fillRect(x*CELL+1, y*CELL+1, CELL-2, CELL-2);
+    ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x*CELL+1, y*CELL+1, CELL-2, 4);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    for(let x = 0; x <= COLS; x++){ ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,H); ctx.stroke(); }
+    for(let y = 0; y <= ROWS; y++){ ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(W,y*CELL); ctx.stroke(); }
+    for(let r = 0; r < ROWS; r++) for(let c = 0; c < COLS; c++) if(grid[r][c]) cell(c, r, grid[r][c]);
+    if(piece) for(let r = 0; r < piece.m.length; r++) for(let c = 0; c < piece.m[r].length; c++)
+      if(piece.m[r][c] && piece.y+r >= 0) cell(piece.x+c, piece.y+r, piece.c);
+  }
+  function over(){
+    running = false; cancelAnimationFrame(raf);
+    const coins = Math.min(45, Math.floor(score/40));
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = `Game over — score ${score}, ${lines} lines.`;
+    document.getElementById('ntEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('tetris', score);
+    wireScoreEntry('tetris', score, 'ntLB', reset);
+  }
+  function reset(){
+    grid = newGrid(); score = 0; lines = 0; running = true;
+    dropAcc = 0; dropInterval = 600; lastT = 0;
+    document.getElementById('ntEnd').innerHTML = '';
+    statusEl.textContent = '← → move, ↑ rotate, ↓ soft drop, Space hard drop.';
+    spawn();
+    raf = requestAnimationFrame(frame);
+  }
+  function onKey(e){
+    if(!running) return;
+    const k = e.key;
+    if(k === 'ArrowLeft'){ e.preventDefault(); move(-1); }
+    else if(k === 'ArrowRight'){ e.preventDefault(); move(1); }
+    else if(k === 'ArrowUp'){ e.preventDefault(); rotate(); }
+    else if(k === 'ArrowDown'){ e.preventDefault(); dropAcc = 0; softDrop(); }
+    else if(k === ' '){ e.preventDefault(); hardDrop(); }
+  }
+  document.addEventListener('keydown', onKey);
+  reset();
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKey); };
+}
+
+/* ---------- Astro Drift ---------- */
+function openAstroDrift(){
+  const W = 480, H = 420;
+  openModal(`
+    <h3>&#9732;&#65039; Astro Drift</h3>
+    <p class="ttt-status" id="adStatus">&larr; &rarr; rotate, &uarr; thrust, Space to fire. Blast the rocks — big ones split.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="adCanvas" width="${W}" height="${H}" style="background:radial-gradient(circle at 50% 40%,#0b1224,#05070f); border:1px solid var(--panel-edge); border-radius:10px;"></canvas>
+    </div>
+    <div id="adEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="adLB" class="lb-live" data-game="asteroids" data-unit="pts">${leaderboardHTML('asteroids','pts')}</div>
+  `);
+  const canvas = document.getElementById('adCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('adStatus');
+  let ship, rocks, bullets, score, lives, running, raf, keys, fireCd, invuln;
+
+  function mkRock(x, y, r){
+    const a = Math.random()*Math.PI*2, sp = (Math.random()*0.6 + 0.4) * (40/r);
+    return { x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, r, spin:(Math.random()-0.5)*0.05, ang:0 };
+  }
+  function spawnWave(n){
+    for(let i = 0; i < n; i++){
+      const edge = Math.random() < 0.5;
+      mkspawn(edge ? 0 : W, Math.random()*H);
+    }
+  }
+  function mkspawn(x, y){ rocks.push(mkRock(x, y, 36)); }
+  function reset(){
+    ship = { x:W/2, y:H/2, ang:-Math.PI/2, vx:0, vy:0 };
+    rocks = []; bullets = []; score = 0; lives = 3; running = true;
+    keys = {}; fireCd = 0; invuln = 60;
+    spawnWave(4);
+    document.getElementById('adEnd').innerHTML = '';
+    statusEl.textContent = '← → rotate, ↑ thrust, Space fire.';
+    raf = requestAnimationFrame(frame);
+  }
+  function wrap(o){ if(o.x<0)o.x+=W; if(o.x>W)o.x-=W; if(o.y<0)o.y+=H; if(o.y>H)o.y-=H; }
+  function fire(){
+    if(fireCd > 0) return;
+    bullets.push({ x:ship.x + Math.cos(ship.ang)*14, y:ship.y + Math.sin(ship.ang)*14,
+      vx:Math.cos(ship.ang)*6 + ship.vx, vy:Math.sin(ship.ang)*6 + ship.vy, life:60 });
+    fireCd = 10;
+  }
+  function hitShip(){
+    lives--; invuln = 90;
+    ship.x = W/2; ship.y = H/2; ship.vx = 0; ship.vy = 0; ship.ang = -Math.PI/2;
+    if(lives < 0) over();
+  }
+  function update(){
+    if(keys['ArrowLeft']) ship.ang -= 0.09;
+    if(keys['ArrowRight']) ship.ang += 0.09;
+    if(keys['ArrowUp']){ ship.vx += Math.cos(ship.ang)*0.16; ship.vy += Math.sin(ship.ang)*0.16; }
+    ship.vx *= 0.99; ship.vy *= 0.99;
+    ship.x += ship.vx; ship.y += ship.vy; wrap(ship);
+    if(fireCd > 0) fireCd--;
+    if(invuln > 0) invuln--;
+    for(const b of bullets){ b.x += b.vx; b.y += b.vy; b.life--; wrap(b); }
+    bullets = bullets.filter(b => b.life > 0);
+    for(const rk of rocks){ rk.x += rk.vx; rk.y += rk.vy; rk.ang += rk.spin; wrap(rk); }
+    // bullet-rock
+    for(let i = rocks.length-1; i >= 0; i--){
+      const rk = rocks[i];
+      for(let j = bullets.length-1; j >= 0; j--){
+        const b = bullets[j];
+        if((b.x-rk.x)**2 + (b.y-rk.y)**2 < rk.r*rk.r){
+          bullets.splice(j,1); rocks.splice(i,1);
+          score += Math.round(60/rk.r*10);
+          statusEl.textContent = 'Score: ' + score;
+          if(rk.r > 16){ rocks.push(mkRock(rk.x, rk.y, rk.r/2)); rocks.push(mkRock(rk.x, rk.y, rk.r/2)); }
+          break;
+        }
+      }
+    }
+    // ship-rock
+    if(invuln <= 0){
+      for(const rk of rocks){ if((ship.x-rk.x)**2 + (ship.y-rk.y)**2 < (rk.r+9)**2){ hitShip(); break; } }
+    }
+    if(rocks.length === 0 && running){ spawnWave(4 + Math.floor(score/300)); }
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle = '#9aa6ff'; ctx.lineWidth = 1.4;
+    for(const rk of rocks){
+      ctx.save(); ctx.translate(rk.x, rk.y); ctx.rotate(rk.ang);
+      ctx.shadowColor = '#6b7cff'; ctx.shadowBlur = 8; ctx.beginPath();
+      const n = 9;
+      for(let i = 0; i < n; i++){ const a = i/n*Math.PI*2; const rr = rk.r * (0.8 + ((i*7)%3)*0.1); ctx.lineTo(Math.cos(a)*rr, Math.sin(a)*rr); }
+      ctx.closePath(); ctx.stroke(); ctx.restore();
+    }
+    ctx.shadowBlur = 0; ctx.fillStyle = '#fef08a';
+    for(const b of bullets){ ctx.beginPath(); ctx.arc(b.x, b.y, 2.5, 0, Math.PI*2); ctx.fill(); }
+    // ship
+    if(!(invuln > 0 && Math.floor(invuln/5)%2)){
+      ctx.save(); ctx.translate(ship.x, ship.y); ctx.rotate(ship.ang);
+      ctx.strokeStyle = '#4deeea'; ctx.lineWidth = 2; ctx.shadowColor = '#4deeea'; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.moveTo(14,0); ctx.lineTo(-10,-9); ctx.lineTo(-5,0); ctx.lineTo(-10,9); ctx.closePath(); ctx.stroke();
+      if(keys['ArrowUp']){ ctx.strokeStyle = '#ff8a5a'; ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(-14, (Math.random()-0.5)*6); ctx.stroke(); }
+      ctx.restore(); ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = 'rgba(245,240,255,0.9)'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('Score: ' + score, 12, 22);
+    ctx.textAlign = 'right'; ctx.fillText('Ships: ' + '▲'.repeat(Math.max(0, lives)), W-12, 22);
+  }
+  function frame(){ if(!running) return; update(); draw(); raf = requestAnimationFrame(frame); }
+  function over(){
+    running = false; cancelAnimationFrame(raf);
+    const coins = Math.min(45, Math.floor(score/40));
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = 'Destroyed — final score ' + score;
+    document.getElementById('adEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('asteroids', score);
+    wireScoreEntry('asteroids', score, 'adLB', reset);
+  }
+  function onKeyDown(e){ if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault(); keys[e.key] = true; if(e.key === ' ') fire(); }
+  function onKeyUp(e){ keys[e.key] = false; }
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
+  reset();
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); };
 }
 
 /* ---------- Spin The Wheel ---------- */
