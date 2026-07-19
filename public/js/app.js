@@ -2358,7 +2358,7 @@ function fwLevels(){
       diamonds:[ {x:150, y:330, type:'fire'}, {x:520, y:330, type:'water'},
         {x:120, y:150, type:'fire'}, {x:560, y:150, type:'water'},
         {x:330, y:240, type:'water'}, {x:360, y:240, type:'fire'} ],
-      fireStart:{x:44, y:FW_H-60}, waterStart:{x:FW_W-68, y:FW_H-60},
+      fireStart:{x:44, y:FW_H-62}, waterStart:{x:FW_W-68, y:FW_H-62},
       fireDoor:{x:70, y:132}, waterDoor:{x:614, y:132},
     },
     {
@@ -2374,7 +2374,7 @@ function fwLevels(){
       diamonds:[ {x:60, y:322, type:'fire'}, {x:FW_W-80, y:322, type:'water'},
         {x:200, y:122, type:'water'}, {x:500, y:122, type:'fire'},
         {x:305, y:220, type:'fire'}, {x:340, y:220, type:'water'} ],
-      fireStart:{x:44, y:FW_H-60}, waterStart:{x:FW_W-68, y:FW_H-60},
+      fireStart:{x:44, y:FW_H-62}, waterStart:{x:FW_W-68, y:FW_H-62},
       fireDoor:{x:170, y:106}, waterDoor:{x:520, y:106},
     },
     {
@@ -2392,8 +2392,29 @@ function fwLevels(){
       diamonds:[ {x:110, y:222, type:'fire'}, {x:560, y:222, type:'water'},
         {x:300, y:290, type:'fire'}, {x:340, y:290, type:'water'},
         {x:290, y:132, type:'water'}, {x:410, y:132, type:'fire'} ],
-      fireStart:{x:44, y:FW_H-60}, waterStart:{x:FW_W-68, y:FW_H-60},
+      fireStart:{x:44, y:FW_H-62}, waterStart:{x:FW_W-68, y:FW_H-62},
       fireDoor:{x:70, y:336}, waterDoor:{x:614, y:336},
+    },
+    {
+      name:'Grand Temple',
+      platforms:[ground, wallL, wallR,
+        [0, 390, 150, 16], [FW_W-150, 390, 150, 16],
+        [230, 350, 120, 16], [370, 350, 120, 16],
+        [120, 280, 130, 16], [470, 280, 130, 16],
+        [300, 210, 120, 16], [60, 150, 130, 16], [530, 150, 130, 16]],
+      pools:[ {x:150, y:FW_H-42, w:120, h:16, type:'water'}, {x:450, y:FW_H-42, w:120, h:16, type:'fire'},
+              {x:300, y:FW_H-42, w:120, h:16, type:'goo'} ],
+      gates:[ {x:130, y:84, w:16, h:66, ctrl:0}, {x:574, y:84, w:16, h:66, ctrl:1} ],
+      buttons:[ {x:305, y:198, ctrl:0} ],
+      levers:[ {x:340, y:186, ctrl:1} ],
+      movers:[ {x:230, y:350, w:80, h:14, x1:60, y1:150, ctrl:0, sp:0.014},
+               {x:410, y:350, w:80, h:14, x1:530, y1:150, ctrl:1, sp:0.014} ],
+      diamonds:[ {x:70, y:362, type:'fire'}, {x:FW_W-90, y:362, type:'water'},
+        {x:270, y:322, type:'water'}, {x:400, y:322, type:'fire'},
+        {x:150, y:252, type:'fire'}, {x:500, y:252, type:'water'},
+        {x:110, y:122, type:'water'}, {x:560, y:122, type:'fire'} ],
+      fireStart:{x:44, y:FW_H-62}, waterStart:{x:FW_W-68, y:FW_H-62},
+      fireDoor:{x:70, y:60}, waterDoor:{x:614, y:60},
     },
   ];
 }
@@ -2420,13 +2441,24 @@ function openFireWater(levelIdx){
   const gates = L.gates.map(g => ({ ...g, open:false }));
   const buttons = L.buttons.map(b => ({ ...b, w:36, h:9, pressed:false }));
   const levers = L.levers.map(v => ({ ...v, w:26, h:14, on:false, occ:false }));
-  const movers = L.movers.map(m => ({ ...m, x0:m.x, y0:m.y, t:0 }));
+  const movers = L.movers.map(m => ({ ...m, x0:m.x, y0:m.y, t:0, dx:0, dy:0 }));
   let diamonds = L.diamonds.map(d => ({ ...d }));
   const totalFire = diamonds.filter(d => d.type === 'fire').length;
   const totalWater = diamonds.filter(d => d.type === 'water').length;
-  let startTime = performance.now(), elapsed = 0;
+  const startTime = performance.now();
+  let elapsed = 0;
+  let parts = [];
 
-  function mkPlayer(s, type){ return { x:s.x, y:s.y, w:20, h:28, vx:0, vy:0, onGround:false, type, alive:true, atDoor:false, face:1, ride:null }; }
+  function emit(x, y, color, n, opt){
+    opt = opt || {};
+    for(let i = 0; i < n; i++){
+      parts.push({ x, y, vx:(Math.random()-0.5)*(opt.spread||2), vy:(opt.vy0||-1)-Math.random()*(opt.vyr||1.5),
+        life:1, decay:opt.decay||0.03, grav:opt.grav==null?0.06:opt.grav, size:opt.size||3, color });
+    }
+  }
+
+  function mkPlayer(s, type){ return { x:s.x, y:s.y, w:20, h:28, vx:0, vy:0, onGround:false, type, alive:true,
+    atDoor:false, face:1, anim:0, coyote:0, jumpBuf:0, jumpHeld:false, squash:1, emitT:0 }; }
   const fire = mkPlayer(L.fireStart, 'fire');
   const water = mkPlayer(L.waterStart, 'water');
   const keys = {};
@@ -2436,12 +2468,10 @@ function openFireWater(levelIdx){
   document.addEventListener('keyup', ku);
 
   let running = true, raf = null, deathReason = '';
-  const GRAV = 0.7, MOVE = 3.2, JUMP = 12.8;
+  const GRAV = 0.68, ACCEL = 0.9, FRICTION = 0.78, MAXV = 3.7, JUMP = 12.6, COYOTE = 7, BUF = 7;
 
   function overlap(a, b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
-  function active(id){
-    return buttons.some(b => b.ctrl === id && b.pressed) || levers.some(v => v.ctrl === id && v.on);
-  }
+  function active(id){ return buttons.some(b => b.ctrl === id && b.pressed) || levers.some(v => v.ctrl === id && v.on); }
   function solids(){
     const s = platforms.slice();
     for(const g of gates) if(!g.open) s.push({ x:g.x, y:g.y, w:g.w, h:g.h });
@@ -2466,38 +2496,59 @@ function openFireWater(levelIdx){
       m.y = m.y0 + (m.y1 - m.y0) * m.t;
       m.dx = m.x - prevX; m.dy = m.y - prevY;
     }
-    // carry riders with their platform
-    for(const p of [fire, water]){
-      if(p.ride && movers.includes(p.ride)){ p.x += p.ride.dx; p.y += p.ride.dy; }
-    }
+    for(const p of [fire, water]){ if(p.ride && movers.includes(p.ride)){ p.x += p.ride.dx; p.y += p.ride.dy; } }
   }
 
   function movePlayer(p, left, right, up){
     if(!p.alive) return;
-    p.vx = 0;
-    if(keys[left]){ p.vx = -MOVE; p.face = -1; }
-    if(keys[right]){ p.vx = MOVE; p.face = 1; }
-    if(keys[up] && p.onGround){ p.vy = -JUMP; p.onGround = false; }
+    if(p.coyote > 0) p.coyote--;
+    if(p.jumpBuf > 0) p.jumpBuf--;
+    const wl = keys[left], wr = keys[right];
+    if(wl){ p.vx -= ACCEL; p.face = -1; }
+    if(wr){ p.vx += ACCEL; p.face = 1; }
+    if(!wl && !wr) p.vx *= FRICTION;
+    p.vx = Math.max(-MAXV, Math.min(MAXV, p.vx));
+    if(keys[up] && !p.jumpHeld) p.jumpBuf = BUF;
+    if(p.jumpBuf > 0 && p.coyote > 0){ p.vy = -JUMP; p.coyote = 0; p.jumpBuf = 0; p.onGround = false; p.squash = 0.7; emit(p.x+p.w/2, p.y+p.h, p.type==='fire'?'#ffb27a':'#9be3ff', 6, {vy0:0, vyr:1, spread:3, grav:0.12, size:2.5}); }
+    if(!keys[up] && p.vy < -4) p.vy *= 0.86;
+    p.jumpHeld = keys[up];
     p.vy += GRAV;
     const sol = solids();
     p.x += p.vx;
-    for(const box of sol){ if(overlap(p, box)){ if(p.vx > 0) p.x = box.x - p.w; else if(p.vx < 0) p.x = box.x + box.w; } }
+    for(const box of sol){ if(overlap(p, box)){ if(p.vx > 0) p.x = box.x - p.w; else if(p.vx < 0) p.x = box.x + box.w; p.vx = 0; } }
+    const wasAir = !p.onGround;
     p.y += p.vy; p.onGround = false; p.ride = null;
     for(const box of sol){
       if(overlap(p, box)){
-        if(p.vy > 0){ p.y = box.y - p.h; p.vy = 0; p.onGround = true; if(box.mover) p.ride = box.mover; }
+        if(p.vy > 0){ p.y = box.y - p.h; if(wasAir && p.vy > 8){ p.squash = 0.72; emit(p.x+p.w/2, p.y+p.h, p.type==='fire'?'#ffb27a':'#9be3ff', 5, {vy0:0, vyr:0.6, spread:3, grav:0.1, size:2}); } p.vy = 0; p.onGround = true; if(box.mover) p.ride = box.mover; }
         else if(p.vy < 0){ p.y = box.y + box.h; p.vy = 0; }
       }
     }
+    if(p.onGround) p.coyote = COYOTE;
+    // animation + trail
+    p.anim += Math.abs(p.vx) * 0.12 + (p.onGround ? 0 : 0.02);
+    p.squash += (1 - p.squash) * 0.2;
+    p.emitT += 1;
+    if(p.emitT > 4){ p.emitT = 0; emit(p.x + p.w/2 + (Math.random()-0.5)*8, p.y + (p.type==='fire'?2:6), p.type==='fire'?'#ff7a3c':'#5cc8ff', 1, {vy0:-0.6, vyr:0.8, spread:1, grav:p.type==='fire'?-0.02:0.05, size:2.5, decay:0.05}); }
     for(const hz of pools){
       if(overlap(p, { x:hz.x, y:hz.y-4, w:hz.w, h:hz.h+4 })){
         if(hz.type === 'goo'){ p.alive = false; deathReason = 'the green goo'; }
         else if(hz.type !== p.type){ p.alive = false; deathReason = hz.type === 'water' ? 'the water' : 'the lava'; }
+        if(!p.alive) emit(p.x+p.w/2, p.y+p.h/2, hz.type==='water'?'#7dd3fc':hz.type==='goo'?'#a3e635':'#fca5a5', 18, {spread:4, vy0:-1, vyr:3, grav:0.1, size:3});
       }
     }
+    const before = diamonds.length;
     diamonds = diamonds.filter(gm => !(gm.type === p.type && overlap(p, { x:gm.x, y:gm.y, w:16, h:16 })));
+    if(diamonds.length < before) emit(p.x+p.w/2, p.y+p.h/2, p.type==='fire'?'#ff8a5a':'#7dd3fc', 12, {spread:3, vy0:-1.5, vyr:2, grav:0.08, size:2.5});
     const door = p.type === 'fire' ? L.fireDoor : L.waterDoor;
     p.atDoor = overlap(p, { x:door.x, y:door.y, w:36, h:48 });
+  }
+
+  function updateParts(){
+    for(const q of parts){ q.x += q.vx; q.y += q.vy; q.vy += q.grav; q.life -= q.decay; }
+    parts = parts.filter(q => q.life > 0);
+    // ambient bubbles from liquids
+    if(Math.random() < 0.5){ const hz = pools[Math.floor(Math.random()*pools.length)]; if(hz) emit(hz.x + Math.random()*hz.w, hz.y, hz.type==='water'?'#bae6fd':hz.type==='goo'?'#bef264':'#fdba74', 1, {vy0:-0.5, vyr:0.6, spread:0.4, grav:0.01, size:2, decay:0.04}); }
   }
 
   function endGame(win){
@@ -2526,76 +2577,118 @@ function openFireWater(levelIdx){
     }
   }
 
-  // ---- rendering ----
+  // ---------- rendering ----------
   function bg(){
-    // temple brick backdrop
-    ctx.fillStyle = '#140d22'; ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle = 'rgba(120,90,160,0.10)'; ctx.lineWidth = 1;
-    for(let y = 0; y < H; y += 32){
-      for(let x = (Math.floor(y/32)%2)*32; x < W; x += 64){ ctx.strokeRect(x, y, 64, 32); }
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#1a1030'); g.addColorStop(1, '#0a0714');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // pillars
+    ctx.fillStyle = 'rgba(70,50,110,0.25)';
+    for(let x = 70; x < W; x += 150){ ctx.fillRect(x, 0, 40, H); ctx.fillStyle = 'rgba(90,65,140,0.18)'; ctx.fillRect(x-6, 0, 52, 16); ctx.fillStyle = 'rgba(70,50,110,0.25)'; }
+    // brick lines
+    ctx.strokeStyle = 'rgba(120,90,160,0.08)'; ctx.lineWidth = 1;
+    for(let y = 0; y < H; y += 32){ for(let x = (Math.floor(y/32)%2)*32; x < W; x += 64) ctx.strokeRect(x, y, 64, 32); }
+    // wall torches with flicker
+    const t = performance.now()/120;
+    for(const tx of [40, W-40]){
+      for(const ty of [90, 250]){
+        const fl = 8 + Math.sin(t + tx + ty) * 3;
+        const rg = ctx.createRadialGradient(tx, ty, 2, tx, ty, 40);
+        rg.addColorStop(0, 'rgba(255,180,80,0.35)'); rg.addColorStop(1, 'rgba(255,180,80,0)');
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(tx, ty, 40, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.moveTo(tx-5, ty+6); ctx.quadraticCurveTo(tx, ty-fl, tx+5, ty+6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff3c4'; ctx.beginPath(); ctx.moveTo(tx-2, ty+4); ctx.quadraticCurveTo(tx, ty-fl*0.5, tx+2, ty+4); ctx.closePath(); ctx.fill();
+      }
     }
   }
   function drawPool(hz){
-    const c = hz.type === 'fire' ? ['#f97316','#7f1d1d'] : hz.type === 'water' ? ['#38bdf8','#0c4a6e'] : ['#84cc16','#365314'];
+    const c = hz.type === 'fire' ? ['#ff7a2f','#7f1d1d'] : hz.type === 'water' ? ['#38bdf8','#0c4a6e'] : ['#84cc16','#365314'];
+    const t = performance.now()/260;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(hz.x, hz.y + hz.h);
+    ctx.lineTo(hz.x, hz.y + 3);
+    const step = 8;
+    for(let x = hz.x; x <= hz.x + hz.w; x += step){ const wave = Math.sin((x*0.15) + t*2) * 2.5; ctx.lineTo(x, hz.y + 3 + wave); }
+    ctx.lineTo(hz.x + hz.w, hz.y + hz.h); ctx.closePath();
     const g = ctx.createLinearGradient(0, hz.y, 0, hz.y + hz.h);
     g.addColorStop(0, c[0]); g.addColorStop(1, c[1]);
-    ctx.fillStyle = g; ctx.fillRect(hz.x, hz.y, hz.w, hz.h);
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
-    const off = (performance.now()/200) % 12;
-    for(let x = hz.x - 12 + off; x < hz.x + hz.w; x += 12){ ctx.fillRect(Math.max(hz.x,x), hz.y, 6, 2); }
+    ctx.fillStyle = g; ctx.shadowColor = c[0]; ctx.shadowBlur = 12; ctx.fill(); ctx.shadowBlur = 0;
+    // surface highlight
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.beginPath();
+    for(let x = hz.x; x <= hz.x + hz.w; x += step){ const wave = Math.sin((x*0.15) + t*2) * 2.5; if(x===hz.x) ctx.moveTo(x, hz.y+3+wave); else ctx.lineTo(x, hz.y+3+wave); }
+    ctx.stroke(); ctx.restore();
   }
   function drawPlatform(pl){
     ctx.fillStyle = '#4b3a63'; ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
-    ctx.fillStyle = 'rgba(190,160,230,0.35)'; ctx.fillRect(pl.x, pl.y, pl.w, 3);
+    ctx.fillStyle = 'rgba(200,170,240,0.4)'; ctx.fillRect(pl.x, pl.y, pl.w, 3);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(pl.x, pl.y + pl.h - 3, pl.w, 3);
   }
   function drawChar(p){
     const base = p.type === 'fire' ? '#ff5a3c' : '#3ec6ff';
+    const dark = p.type === 'fire' ? '#c2371b' : '#1f88c4';
     const glow = p.type === 'fire' ? '#ffd08a' : '#bff0ff';
+    const cx = p.x + p.w/2, feet = p.y + p.h;
+    const swing = p.onGround ? Math.sin(p.anim) * (Math.abs(p.vx) > 0.4 ? 5 : 0) : 4;
     ctx.save(); ctx.globalAlpha = p.alive ? 1 : 0.25;
-    const cx = p.x + p.w/2;
-    // aura
+    // squash/stretch around feet
+    ctx.translate(cx, feet); ctx.scale(1/Math.max(0.6,p.squash), p.squash); ctx.translate(-cx, -feet);
     ctx.shadowColor = base; ctx.shadowBlur = 14;
+    // legs
+    ctx.strokeStyle = dark; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-4, feet-10); ctx.lineTo(cx-4+swing, feet); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+4, feet-10); ctx.lineTo(cx+4-swing, feet); ctx.stroke();
+    // arms
+    ctx.strokeStyle = base;
+    ctx.beginPath(); ctx.moveTo(cx-5, p.y+16); ctx.lineTo(cx-9, p.y+16-swing*0.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+5, p.y+16); ctx.lineTo(cx+9, p.y+16+swing*0.6); ctx.stroke();
     // body
     ctx.fillStyle = base;
-    ctx.beginPath(); ctx.moveTo(p.x+2, p.y + p.h); ctx.lineTo(p.x+2, p.y + 10);
-    ctx.quadraticCurveTo(cx, p.y - 4, p.x + p.w - 2, p.y + 10); ctx.lineTo(p.x + p.w - 2, p.y + p.h);
-    ctx.closePath(); ctx.fill();
-    // crown (flame tips / water crest)
+    ctx.beginPath(); ctx.moveTo(cx-6, feet-8); ctx.lineTo(cx-6, p.y+12);
+    ctx.quadraticCurveTo(cx, p.y+2, cx+6, p.y+12); ctx.lineTo(cx+6, feet-8); ctx.closePath(); ctx.fill();
+    // head
+    ctx.beginPath(); ctx.arc(cx, p.y+9, 7, 0, Math.PI*2); ctx.fill();
+    // crown: flame / water
     ctx.fillStyle = glow;
+    const t = performance.now()/90;
     if(p.type === 'fire'){
-      ctx.beginPath(); ctx.moveTo(cx-6, p.y+4); ctx.lineTo(cx-2, p.y-8); ctx.lineTo(cx+1, p.y+2); ctx.lineTo(cx+4, p.y-6); ctx.lineTo(cx+6, p.y+4); ctx.closePath(); ctx.fill();
+      for(let i = -1; i <= 1; i++){ const fx = cx + i*4; const fh = 8 + Math.sin(t + i) * 3; ctx.beginPath(); ctx.moveTo(fx-3, p.y+4); ctx.quadraticCurveTo(fx, p.y+2-fh, fx+3, p.y+4); ctx.closePath(); ctx.fill(); }
     } else {
-      ctx.beginPath(); ctx.arc(cx-4, p.y+2, 3, 0, Math.PI*2); ctx.arc(cx+3, p.y, 3, 0, Math.PI*2); ctx.fill();
+      for(let i = -1; i <= 1; i++){ const dx = cx + i*4; const dy = p.y + 2 + Math.sin(t + i)*1.5; ctx.beginPath(); ctx.arc(dx, dy, 2.6, 0, Math.PI*2); ctx.fill(); }
     }
     ctx.shadowBlur = 0;
     // eyes
-    ctx.fillStyle = '#fff'; ctx.fillRect(cx - 6 + p.face*2, p.y + 9, 4, 6); ctx.fillRect(cx + 2 + p.face*2, p.y + 9, 4, 6);
-    ctx.fillStyle = '#111'; ctx.fillRect(cx - 5 + p.face*3, p.y + 11, 2, 3); ctx.fillRect(cx + 3 + p.face*3, p.y + 11, 2, 3);
+    ctx.fillStyle = '#fff'; ctx.fillRect(cx-4+p.face, p.y+6, 3, 5); ctx.fillRect(cx+1+p.face, p.y+6, 3, 5);
+    ctx.fillStyle = '#0b0712'; ctx.fillRect(cx-3+p.face*2, p.y+8, 1.6, 3); ctx.fillRect(cx+2+p.face*2, p.y+8, 1.6, 3);
     ctx.restore();
   }
   function drawDoor(d, type, ready){
     const c = type === 'fire' ? '#ff5a3c' : '#3ec6ff';
     ctx.fillStyle = ready ? (type === 'fire' ? 'rgba(255,90,60,0.5)' : 'rgba(62,198,255,0.5)') : 'rgba(255,255,255,0.06)';
     ctx.fillRect(d.x, d.y, 36, 48);
-    ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.shadowColor = c; ctx.shadowBlur = ready ? 14 : 4;
+    ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.shadowColor = c; ctx.shadowBlur = ready ? 16 : 5;
     ctx.strokeRect(d.x, d.y, 36, 48);
     ctx.beginPath(); ctx.arc(d.x + 18, d.y, 18, Math.PI, 0); ctx.stroke(); ctx.shadowBlur = 0;
-    // torch marker
-    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(d.x + 18, d.y + 24, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(d.x + 18, d.y + 26, 5, 0, Math.PI*2); ctx.fill();
   }
   function drawDiamond(gm){
-    ctx.fillStyle = gm.type === 'fire' ? '#ff8a5a' : '#7dd3fc';
-    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 12;
-    const b = Math.sin(performance.now()/300 + gm.x) * 1.5;
-    ctx.beginPath();
-    ctx.moveTo(gm.x+8, gm.y+b); ctx.lineTo(gm.x+16, gm.y+8+b); ctx.lineTo(gm.x+8, gm.y+16+b); ctx.lineTo(gm.x, gm.y+8+b);
-    ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
+    const col = gm.type === 'fire' ? '#ff8a5a' : '#7dd3fc';
+    const b = Math.sin(performance.now()/300 + gm.x) * 2;
+    ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 14;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.moveTo(gm.x+8, gm.y+b); ctx.lineTo(gm.x+16, gm.y+8+b); ctx.lineTo(gm.x+8, gm.y+16+b); ctx.lineTo(gm.x, gm.y+8+b); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.moveTo(gm.x+8, gm.y+b+2); ctx.lineTo(gm.x+12, gm.y+7+b); ctx.lineTo(gm.x+8, gm.y+9+b); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  function drawParts(){
+    for(const q of parts){ ctx.globalAlpha = Math.max(0, q.life); ctx.fillStyle = q.color; ctx.beginPath(); ctx.arc(q.x, q.y, q.size * q.life, 0, Math.PI*2); ctx.fill(); }
+    ctx.globalAlpha = 1;
   }
 
   function draw(){
     bg();
     for(const pl of platforms) drawPlatform(pl);
-    for(const m of movers){ drawPlatform(m); ctx.strokeStyle = 'rgba(250,204,21,0.5)'; ctx.strokeRect(m.x, m.y, m.w, m.h); }
+    for(const m of movers){ drawPlatform(m); ctx.strokeStyle = 'rgba(250,204,21,0.5)'; ctx.setLineDash([5,4]); ctx.strokeRect(m.x, m.y, m.w, m.h); ctx.setLineDash([]); }
     for(const hz of pools) drawPool(hz);
     for(const g of gates){
       if(!g.open){ ctx.fillStyle = '#9aa6b2'; ctx.fillRect(g.x, g.y, g.w, g.h); ctx.strokeStyle = 'rgba(0,0,0,0.3)'; for(let y=g.y; y<g.y+g.h; y+=8) ctx.strokeRect(g.x, y, g.w, 8); }
@@ -2608,13 +2701,14 @@ function openFireWater(levelIdx){
     }
     for(const v of levers){
       ctx.fillStyle = '#3b3355'; ctx.fillRect(v.x, v.y + 8, v.w, 6);
-      ctx.strokeStyle = v.on ? '#4ade80' : '#f87171'; ctx.lineWidth = 4;
+      ctx.strokeStyle = v.on ? '#4ade80' : '#f87171'; ctx.lineWidth = 4; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(v.x + v.w/2, v.y + 10); ctx.lineTo(v.x + v.w/2 + (v.on ? 9 : -9), v.y); ctx.stroke();
       ctx.fillStyle = v.on ? '#4ade80' : '#f87171'; ctx.beginPath(); ctx.arc(v.x + v.w/2 + (v.on ? 9 : -9), v.y, 4, 0, Math.PI*2); ctx.fill();
     }
     for(const gm of diamonds) drawDiamond(gm);
     drawDoor(L.fireDoor, 'fire', fire.atDoor);
     drawDoor(L.waterDoor, 'water', water.atDoor);
+    drawParts();
     drawChar(fire); drawChar(water);
     // HUD
     const gotF = totalFire - diamonds.filter(d => d.type === 'fire').length;
@@ -2631,6 +2725,7 @@ function openFireWater(levelIdx){
     updateMechanisms();
     movePlayer(fire, 'arrowleft', 'arrowright', 'arrowup');
     movePlayer(water, 'a', 'd', 'w');
+    updateParts();
     if(!fire.alive || !water.alive){ draw(); endGame(false); return; }
     if(fire.atDoor && water.atDoor){ draw(); endGame(true); return; }
     draw();
