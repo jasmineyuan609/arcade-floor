@@ -16,6 +16,10 @@ const BUILTIN_GAMES = [
   { id:'pong', title:'Neon Pong', creator:'The Floor', pitch:'Real-time online 1v1. Quick match or share a room code, then rally past your friend to 7.', emoji:'🏓', pace:'fast', type:'reflex', players:'multi', difficulty:'medium', accent:'cyan', builtin:true },
   { id:'blade', title:'Blade Ball', creator:'The Floor', pitch:'Online reflex duel — the ball rockets between you two, parry in time or you\'re out. It speeds up every hit.', emoji:'⚔️', pace:'fast', type:'reflex', players:'multi', difficulty:'hard', accent:'pink', builtin:true },
   { id:'firewater', title:'Fireboy & Watergirl', creator:'The Floor', pitch:'Two-player co-op on one keyboard. Fireboy (arrows) and Watergirl (WASD) grab the gems and reach their doors.', emoji:'🔥', pace:'slow', type:'strategy', players:'multi', difficulty:'medium', accent:'yellow', builtin:true },
+  { id:'brick', title:'Brick Breaker', creator:'The Floor', pitch:'Bounce the ball off your paddle to shatter every brick. Glowing particles, power bricks, and rising speed.', emoji:'🧱', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true },
+  { id:'shooter', title:'Star Blaster', creator:'The Floor', pitch:'A neon space shooter — dodge and blast waves of invaders before they reach you. Explosions included.', emoji:'🚀', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true },
+  { id:'hoops', title:'Hoops', creator:'The Floor', pitch:'Flick to shoot with real arc physics. Drain as many buckets as you can before the clock runs out.', emoji:'🏀', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true },
+  { id:'racer', title:'Traffic Racer', creator:'The Floor', pitch:'Weave your car through endless traffic at increasing speed. One crash ends the run.', emoji:'🏎️', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'green', builtin:true },
   { id:'color-rush', title:'Color Rush', creator:'The Floor', pitch:'A color flashes, four buttons appear — smash the right one before the clock runs out.', emoji:'🎨', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true, lockable:true },
   { id:'mole-smash', title:'Mole Smash', creator:'The Floor', pitch:'Nine holes, one mole, nowhere near enough time. Tap it before it ducks.', emoji:'🐹', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true, lockable:true },
 ];
@@ -309,6 +313,10 @@ function openBuiltinGame(id){
   if(id === 'pong') return openPong();
   if(id === 'blade') return openBladeBall();
   if(id === 'firewater') return openFireWater();
+  if(id === 'brick') return openBrickBreaker();
+  if(id === 'shooter') return openStarBlaster();
+  if(id === 'hoops') return openHoops();
+  if(id === 'racer') return openRacer();
   if(id === 'color-rush') return openColorRush();
   if(id === 'mole-smash') return openMoleSmash();
 }
@@ -2495,6 +2503,528 @@ function openFireWater(){
     document.removeEventListener('keyup', ku);
   }
   activeGameCleanup = cleanup;
+}
+
+/* ---------- Brick Breaker ---------- */
+function openBrickBreaker(){
+  const W = 480, H = 420;
+  openModal(`
+    <h3>&#129521; Brick Breaker</h3>
+    <p class="ttt-status" id="brStatus">Move with the mouse or arrow keys. Clear every brick.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="brCanvas" width="${W}" height="${H}" style="max-width:100%; background:radial-gradient(circle at 50% 0,#141826,#080a12); border:1px solid var(--panel-edge); border-radius:10px; cursor:none;"></canvas>
+    </div>
+    <div id="brControls" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="brLB" class="lb-live" data-game="brick" data-unit="pts">${leaderboardHTML('brick','pts')}</div>
+  `);
+  const canvas = document.getElementById('brCanvas');
+  const ctx = canvas.getContext('2d');
+  const COLORS = ['#f43f5e', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#a78bfa'];
+  const PADDLE_W = 84, PADDLE_H = 12, R = 7;
+  let paddleX, ball, bricks, score, lives, running, started, particles, speed, raf;
+
+  function buildBricks(){
+    bricks = [];
+    const cols = 9, rows = 6, bw = 46, bh = 18, gap = 4, offX = (W - (cols * (bw + gap) - gap)) / 2, offY = 46;
+    for(let r = 0; r < rows; r++) for(let c = 0; c < cols; c++){
+      bricks.push({ x: offX + c*(bw+gap), y: offY + r*(bh+gap), w: bw, h: bh, color: COLORS[r % COLORS.length], hp: r < 2 ? 2 : 1 });
+    }
+  }
+  function reset(){
+    paddleX = W/2 - PADDLE_W/2;
+    speed = 4.4;
+    ball = { x: W/2, y: H - 60, vx: speed * 0.6, vy: -speed };
+    score = 0; lives = 3; running = false; started = false; particles = [];
+    buildBricks();
+  }
+  reset();
+
+  function burst(x, y, color){
+    for(let i = 0; i < 10; i++){
+      const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3;
+      particles.push({ x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 1, color });
+    }
+  }
+
+  function update(){
+    if(!running) return;
+    ball.x += ball.vx; ball.y += ball.vy;
+    if(ball.x < R){ ball.x = R; ball.vx = Math.abs(ball.vx); }
+    if(ball.x > W - R){ ball.x = W - R; ball.vx = -Math.abs(ball.vx); }
+    if(ball.y < R){ ball.y = R; ball.vy = Math.abs(ball.vy); }
+    // paddle
+    if(ball.vy > 0 && ball.y + R >= H - 24 && ball.y + R <= H - 10 && ball.x >= paddleX && ball.x <= paddleX + PADDLE_W){
+      ball.vy = -Math.abs(ball.vy);
+      const hit = (ball.x - (paddleX + PADDLE_W/2)) / (PADDLE_W/2);
+      ball.vx = hit * speed * 1.1;
+    }
+    if(ball.y > H + 20){
+      lives--;
+      if(lives <= 0){ gameOver(); return; }
+      ball = { x: W/2, y: H - 60, vx: speed * 0.6, vy: -speed };
+    }
+    // bricks
+    for(let i = 0; i < bricks.length; i++){
+      const b = bricks[i];
+      if(ball.x > b.x && ball.x < b.x + b.w && ball.y - R < b.y + b.h && ball.y + R > b.y){
+        ball.vy = -ball.vy;
+        b.hp--;
+        burst(ball.x, ball.y, b.color);
+        if(b.hp <= 0){ bricks.splice(i, 1); score += 10; awardCoins(1); speed = Math.min(8, speed + 0.04); }
+        else { score += 4; }
+        break;
+      }
+    }
+    particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= 0.03; });
+    particles = particles.filter(p => p.life > 0);
+    if(bricks.length === 0){ win(); return; }
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    bricks.forEach(b => {
+      ctx.fillStyle = b.color;
+      ctx.shadowColor = b.color; ctx.shadowBlur = b.hp > 1 ? 14 : 6;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    });
+    ctx.shadowBlur = 0;
+    particles.forEach(p => { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 3, 3); });
+    ctx.globalAlpha = 1;
+    const grd = ctx.createLinearGradient(paddleX, 0, paddleX + PADDLE_W, 0);
+    grd.addColorStop(0, '#22d3ee'); grd.addColorStop(1, '#a78bfa');
+    ctx.fillStyle = grd; ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 12;
+    ctx.fillRect(paddleX, H - 24, PADDLE_W, PADDLE_H);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, R, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(245,240,255,0.9)'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('Score: ' + score, 12, 22);
+    ctx.textAlign = 'right'; ctx.fillText('Lives: ' + '❤'.repeat(Math.max(0, lives)), W - 12, 22);
+    if(!started){ ctx.fillStyle = 'rgba(245,240,255,0.9)'; ctx.textAlign = 'center'; ctx.fillText('Click or press a key to launch', W/2, H/2); }
+  }
+
+  function frame(){ update(); draw(); raf = requestAnimationFrame(frame); }
+
+  function endPanel(message){
+    running = false; cancelAnimationFrame(raf);
+    document.getElementById('brStatus').textContent = message + ' — score: ' + score;
+    const record = isNewRecord('brick', score, false);
+    document.getElementById('brControls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="brName" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="brSave">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="brRestart">Play Again</button>
+      </div>`;
+    document.getElementById('brSave').addEventListener('click', async () => {
+      const name = document.getElementById('brName').value.trim() || 'Anonymous';
+      await saveScore('brick', name, score, false);
+      document.getElementById('brLB').innerHTML = leaderboardHTML('brick','pts');
+      document.getElementById('brSave').disabled = true;
+    });
+    document.getElementById('brRestart').addEventListener('click', () => {
+      reset(); document.getElementById('brControls').innerHTML = '';
+      document.getElementById('brStatus').textContent = 'Move with the mouse or arrow keys. Clear every brick.';
+      raf = requestAnimationFrame(frame);
+    });
+  }
+  function gameOver(){ endPanel('Game over'); }
+  function win(){ awardCoins(10); endPanel('You cleared the board! 🎉'); }
+
+  function begin(){ if(!started){ started = true; running = true; } }
+  function movePaddle(clientX){
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * (W / rect.width);
+    paddleX = Math.max(0, Math.min(W - PADDLE_W, x - PADDLE_W/2));
+  }
+  function onMove(e){ movePaddle(e.clientX); }
+  function onTouch(e){ e.preventDefault(); if(e.touches[0]){ begin(); movePaddle(e.touches[0].clientX); } }
+  canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('mousedown', begin);
+  canvas.addEventListener('touchmove', onTouch, { passive:false });
+  canvas.addEventListener('touchstart', onTouch, { passive:false });
+  let keyDir = 0;
+  function keyDown(e){ if(e.key==='ArrowLeft'){keyDir=-1;begin();e.preventDefault();} else if(e.key==='ArrowRight'){keyDir=1;begin();e.preventDefault();} else if(e.key===' '){begin();e.preventDefault();} }
+  function keyUp(e){ if(e.key==='ArrowLeft'||e.key==='ArrowRight') keyDir=0; }
+  document.addEventListener('keydown', keyDown);
+  document.addEventListener('keyup', keyUp);
+  const keyTimer = setInterval(() => { if(keyDir) paddleX = Math.max(0, Math.min(W - PADDLE_W, paddleX + keyDir * 8)); }, 16);
+
+  raf = requestAnimationFrame(frame);
+  activeGameCleanup = () => {
+    running = false; cancelAnimationFrame(raf); clearInterval(keyTimer);
+    document.removeEventListener('keydown', keyDown); document.removeEventListener('keyup', keyUp);
+  };
+}
+
+/* ---------- Star Blaster (space shooter) ---------- */
+function openStarBlaster(){
+  const W = 460, H = 480;
+  openModal(`
+    <h3>&#128640; Star Blaster</h3>
+    <p class="ttt-status" id="sbStatus">Move: &larr; &rarr; or A/D &nbsp;•&nbsp; Fire: Space (hold). Don't let them land.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="sbCanvas" width="${W}" height="${H}" style="max-width:100%; background:radial-gradient(circle at 50% 30%,#0b1030,#04060f); border:1px solid var(--panel-edge); border-radius:10px; cursor:crosshair;"></canvas>
+    </div>
+    <div id="sbControls" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="sbLB" class="lb-live" data-game="shooter" data-unit="pts">${leaderboardHTML('shooter','pts')}</div>
+  `);
+  const canvas = document.getElementById('sbCanvas');
+  const ctx = canvas.getContext('2d');
+  const stars = Array.from({ length: 60 }, () => ({ x: Math.random()*W, y: Math.random()*H, s: Math.random()*1.5+0.3 }));
+  let ship, bullets, enemies, boom, score, lives, running, tick, raf, spawnEvery, sinceSpawn, sinceShot;
+
+  function reset(){
+    ship = { x: W/2, w: 30, h: 20, speed: 5 };
+    bullets = []; enemies = []; boom = []; score = 0; lives = 3; running = true;
+    tick = 0; spawnEvery = 50; sinceSpawn = 0; sinceShot = 0;
+  }
+  reset();
+
+  function spawn(){
+    const x = 24 + Math.random() * (W - 48);
+    enemies.push({ x, y: -20, w: 26, h: 20, vy: 1 + Math.random()*0.8 + score/2000, wob: Math.random()*Math.PI*2 });
+  }
+  function explode(x, y, color){
+    for(let i = 0; i < 14; i++){ const a = Math.random()*Math.PI*2, sp = 1+Math.random()*3.5; boom.push({ x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1, color }); }
+  }
+
+  const keys = {};
+  function kd(e){ const k = e.key.toLowerCase(); if(['arrowleft','arrowright','a','d',' '].includes(k)){ keys[k]=true; e.preventDefault(); } }
+  function ku(e){ keys[e.key.toLowerCase()] = false; }
+  document.addEventListener('keydown', kd);
+  document.addEventListener('keyup', ku);
+
+  function update(){
+    if(!running) return;
+    tick++;
+    if(keys['arrowleft'] || keys['a']) ship.x -= ship.speed;
+    if(keys['arrowright'] || keys['d']) ship.x += ship.speed;
+    ship.x = Math.max(ship.w/2, Math.min(W - ship.w/2, ship.x));
+    sinceShot++;
+    if(keys[' '] && sinceShot > 9){ bullets.push({ x: ship.x, y: H - 44 }); sinceShot = 0; }
+    bullets.forEach(b => b.y -= 8);
+    bullets = bullets.filter(b => b.y > -10);
+    sinceSpawn++;
+    if(sinceSpawn >= spawnEvery){ spawn(); sinceSpawn = 0; if(spawnEvery > 20) spawnEvery -= 0.5; }
+    enemies.forEach(en => { en.y += en.vy; en.x += Math.sin(tick/30 + en.wob) * 0.8; });
+    // collisions bullet-enemy
+    for(let i = enemies.length - 1; i >= 0; i--){
+      const en = enemies[i];
+      for(let j = bullets.length - 1; j >= 0; j--){
+        const b = bullets[j];
+        if(Math.abs(b.x - en.x) < en.w/2 + 3 && Math.abs(b.y - en.y) < en.h/2 + 6){
+          explode(en.x, en.y, '#f472b6'); enemies.splice(i, 1); bullets.splice(j, 1);
+          score += 15; awardCoins(1);
+          break;
+        }
+      }
+    }
+    for(let i = enemies.length - 1; i >= 0; i--){
+      if(enemies[i].y > H - 20){ const ex = enemies[i].x; enemies.splice(i, 1); lives--; explode(ex, H - 20, '#f43f5e'); if(lives <= 0){ gameOver(); return; } }
+    }
+    boom.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; });
+    boom = boom.filter(p => p.life > 0);
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    stars.forEach(s => { s.y += s.s; if(s.y > H) s.y = 0; ctx.fillRect(s.x, s.y, s.s, s.s); });
+    // bullets
+    ctx.fillStyle = '#22d3ee'; ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 8;
+    bullets.forEach(b => ctx.fillRect(b.x - 2, b.y, 4, 12));
+    ctx.shadowBlur = 0;
+    // enemies
+    enemies.forEach(en => {
+      ctx.fillStyle = '#f472b6'; ctx.shadowColor = '#f472b6'; ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(en.x, en.y + en.h/2); ctx.lineTo(en.x - en.w/2, en.y - en.h/2); ctx.lineTo(en.x + en.w/2, en.y - en.h/2);
+      ctx.closePath(); ctx.fill();
+    });
+    ctx.shadowBlur = 0;
+    boom.forEach(p => { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 3, 3); });
+    ctx.globalAlpha = 1;
+    // ship
+    ctx.fillStyle = '#4ade80'; ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(ship.x, H - 46); ctx.lineTo(ship.x - ship.w/2, H - 22); ctx.lineTo(ship.x + ship.w/2, H - 22);
+    ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(245,240,255,0.9)'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('Score: ' + score, 12, 22);
+    ctx.textAlign = 'right'; ctx.fillText('Lives: ' + '❤'.repeat(Math.max(0, lives)), W - 12, 22);
+  }
+
+  function frame(){ update(); draw(); raf = requestAnimationFrame(frame); }
+
+  function gameOver(){
+    running = false; cancelAnimationFrame(raf);
+    document.getElementById('sbStatus').textContent = 'Game over — score: ' + score;
+    const record = isNewRecord('shooter', score, false);
+    document.getElementById('sbControls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="sbName" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="sbSave">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="sbRestart">Play Again</button>
+      </div>`;
+    document.getElementById('sbSave').addEventListener('click', async () => {
+      const name = document.getElementById('sbName').value.trim() || 'Anonymous';
+      await saveScore('shooter', name, score, false);
+      document.getElementById('sbLB').innerHTML = leaderboardHTML('shooter','pts');
+      document.getElementById('sbSave').disabled = true;
+    });
+    document.getElementById('sbRestart').addEventListener('click', () => {
+      reset(); document.getElementById('sbControls').innerHTML = '';
+      document.getElementById('sbStatus').textContent = 'Move: ← → or A/D • Fire: Space (hold).';
+      raf = requestAnimationFrame(frame);
+    });
+  }
+
+  raf = requestAnimationFrame(frame);
+  activeGameCleanup = () => {
+    running = false; cancelAnimationFrame(raf);
+    document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku);
+  };
+}
+
+/* ---------- Hoops (basketball) ---------- */
+function openHoops(){
+  const W = 420, H = 520;
+  openModal(`
+    <h3>&#127936; Hoops</h3>
+    <p class="ttt-status" id="hpStatus">Drag from the ball and release to shoot. 30 seconds — sink as many as you can.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="hpCanvas" width="${W}" height="${H}" style="max-width:100%; background:linear-gradient(#12203a,#0a0f1c); border:1px solid var(--panel-edge); border-radius:10px; cursor:grab; touch-action:none;"></canvas>
+    </div>
+    <div id="hpControls" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="hpLB" class="lb-live" data-game="hoops" data-unit="pts">${leaderboardHTML('hoops','pts')}</div>
+  `);
+  const canvas = document.getElementById('hpCanvas');
+  const ctx = canvas.getContext('2d');
+  const R = 16, GRAV = 0.4;
+  const rim = { x: W/2, y: 130, w: 74 };
+  let ball, flying, score, timeLeft, running, raf, timer, dragging, dragStart, scoredThisShot, moveHoop, hoopDir;
+
+  function resetBall(){ ball = { x: W/2, y: H - 60, vx: 0, vy: 0 }; flying = false; scoredThisShot = false; }
+  function reset(){ resetBall(); score = 0; timeLeft = 30; running = true; moveHoop = false; hoopDir = 1; }
+  reset();
+
+  function tickClock(){
+    if(!running) return;
+    timeLeft--;
+    document.getElementById('hpStatus').textContent = 'Time: ' + timeLeft + 's  •  Score: ' + score;
+    if(timeLeft <= 0) endGame();
+  }
+
+  function update(){
+    if(!running) return;
+    if(moveHoop){ rim.x += hoopDir * 1.4; if(rim.x < 90 || rim.x > W - 90) hoopDir *= -1; }
+    if(flying){
+      ball.x += ball.vx; ball.y += ball.vy; ball.vy += GRAV;
+      if(ball.x < R || ball.x > W - R) ball.vx *= -0.7;
+      // score: passing down through rim plane within rim width
+      if(!scoredThisShot && ball.vy > 0 && Math.abs(ball.x - rim.x) < rim.w/2 - 6 && ball.y > rim.y && ball.y < rim.y + 18){
+        scoredThisShot = true; score += 2; awardCoins(1);
+        if(score >= 10 && !moveHoop) moveHoop = true;
+      }
+      if(ball.y > H + 40 || (ball.y > H - R && Math.abs(ball.vx) < 0.2 && Math.abs(ball.vy) < 0.2)) resetBall();
+    }
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    // backboard
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(rim.x - 4, rim.y - 60, 8, 60);
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 3; ctx.strokeRect(rim.x - 46, rim.y - 58, 92, 56);
+    // rim
+    ctx.strokeStyle = '#fb7185'; ctx.lineWidth = 5; ctx.shadowColor = '#fb7185'; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.moveTo(rim.x - rim.w/2, rim.y); ctx.lineTo(rim.x + rim.w/2, rim.y); ctx.stroke();
+    // net
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1;
+    for(let i = 0; i <= 6; i++){ const x = rim.x - rim.w/2 + i*(rim.w/6); ctx.beginPath(); ctx.moveTo(x, rim.y); ctx.lineTo(rim.x - rim.w/4 + i*(rim.w/12), rim.y + 26); ctx.stroke(); }
+    ctx.shadowBlur = 0;
+    // aim line
+    if(dragging && dragStart){
+      ctx.strokeStyle = 'rgba(250,204,21,0.7)'; ctx.lineWidth = 3; ctx.setLineDash([6,6]);
+      ctx.beginPath(); ctx.moveTo(ball.x, ball.y); ctx.lineTo(dragStart.cx, dragStart.cy); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // ball
+    const g = ctx.createRadialGradient(ball.x-5, ball.y-5, 3, ball.x, ball.y, R);
+    g.addColorStop(0, '#fdba74'); g.addColorStop(1, '#ea580c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ball.x, ball.y, R, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#7c2d12'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ball.x, ball.y, R, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ball.x - R, ball.y); ctx.lineTo(ball.x + R, ball.y); ctx.moveTo(ball.x, ball.y - R); ctx.lineTo(ball.x, ball.y + R); ctx.stroke();
+  }
+
+  function frame(){ update(); draw(); raf = requestAnimationFrame(frame); }
+
+  function pos(e){ const rect = canvas.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { cx: (t.clientX-rect.left)*(W/rect.width), cy: (t.clientY-rect.top)*(H/rect.height) }; }
+  function down(e){ if(flying || !running) return; const p = pos(e); if(Math.hypot(p.cx-ball.x, p.cy-ball.y) < 60){ dragging = true; dragStart = p; } }
+  function moveD(e){ if(dragging){ e.preventDefault(); dragStart = pos(e); } }
+  function up(){
+    if(!dragging || !dragStart) return;
+    const dx = ball.x - dragStart.cx, dy = ball.y - dragStart.cy;
+    if(Math.hypot(dx, dy) > 12){ ball.vx = dx * 0.16; ball.vy = dy * 0.16; flying = true; }
+    dragging = false; dragStart = null;
+  }
+  canvas.addEventListener('mousedown', down);
+  canvas.addEventListener('mousemove', moveD);
+  window.addEventListener('mouseup', up);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); down(e); }, { passive:false });
+  canvas.addEventListener('touchmove', moveD, { passive:false });
+  canvas.addEventListener('touchend', up);
+
+  function endGame(){
+    running = false; cancelAnimationFrame(raf); clearInterval(timer);
+    document.getElementById('hpStatus').textContent = "Time's up — score: " + score;
+    const record = isNewRecord('hoops', score, false);
+    document.getElementById('hpControls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="hpName" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="hpSave">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="hpRestart">Play Again</button>
+      </div>`;
+    document.getElementById('hpSave').addEventListener('click', async () => {
+      const name = document.getElementById('hpName').value.trim() || 'Anonymous';
+      await saveScore('hoops', name, score, false);
+      document.getElementById('hpLB').innerHTML = leaderboardHTML('hoops','pts');
+      document.getElementById('hpSave').disabled = true;
+    });
+    document.getElementById('hpRestart').addEventListener('click', () => {
+      reset(); document.getElementById('hpControls').innerHTML = '';
+      timer = setInterval(tickClock, 1000);
+      raf = requestAnimationFrame(frame);
+    });
+  }
+
+  timer = setInterval(tickClock, 1000);
+  raf = requestAnimationFrame(frame);
+  activeGameCleanup = () => {
+    running = false; cancelAnimationFrame(raf); clearInterval(timer);
+    canvas.removeEventListener('mousedown', down); canvas.removeEventListener('mousemove', moveD); window.removeEventListener('mouseup', up);
+  };
+}
+
+/* ---------- Traffic Racer ---------- */
+function openRacer(){
+  const W = 360, H = 520, LANES = 4;
+  openModal(`
+    <h3>&#127950;&#65039; Traffic Racer</h3>
+    <p class="ttt-status" id="rcStatus">&larr; &rarr; or A/D to switch lanes. Don't crash.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="rcCanvas" width="${W}" height="${H}" style="max-width:100%; background:#1f2937; border:1px solid var(--panel-edge); border-radius:10px; touch-action:none;"></canvas>
+    </div>
+    <div id="rcControls" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — highest score wins</h4>
+    <div id="rcLB" class="lb-live" data-game="racer" data-unit="m">${leaderboardHTML('racer','m')}</div>
+  `);
+  const canvas = document.getElementById('rcCanvas');
+  const ctx = canvas.getContext('2d');
+  const laneW = W / LANES, carW = laneW * 0.6, carH = 74;
+  const CARCOL = ['#f43f5e', '#facc15', '#22d3ee', '#a78bfa', '#fb923c'];
+  let lane, playerX, traffic, dist, speed, running, raf, roadY, sinceSpawn;
+
+  function laneCenter(l){ return l * laneW + laneW/2; }
+  function reset(){
+    lane = 1; playerX = laneCenter(lane); traffic = []; dist = 0; speed = 5; running = true; roadY = 0; sinceSpawn = 0;
+  }
+  reset();
+
+  function spawn(){
+    const l = Math.floor(Math.random() * LANES);
+    // avoid spawning a wall across all lanes: only spawn if top area of that lane is clear
+    if(traffic.some(t => t.lane === l && t.y < 120)) return;
+    traffic.push({ lane: l, y: -carH, color: CARCOL[Math.floor(Math.random()*CARCOL.length)] });
+  }
+
+  function update(){
+    if(!running) return;
+    dist += speed / 12;
+    speed = Math.min(13, 5 + dist/220);
+    roadY = (roadY + speed) % 60;
+    // ease player toward target lane
+    const target = laneCenter(lane);
+    playerX += (target - playerX) * 0.25;
+    sinceSpawn += speed;
+    if(sinceSpawn > 150){ spawn(); sinceSpawn = 0; }
+    const py = H - carH - 16;
+    traffic.forEach(t => { t.y += speed; });
+    for(const t of traffic){
+      if(Math.abs(laneCenter(t.lane) - target) < 4 && t.y + carH > py && t.y < py + carH){
+        // collision only if actually overlapping in same lane and x close
+        if(Math.abs(laneCenter(t.lane) - playerX) < carW*0.7){ gameOver(); return; }
+      }
+    }
+    traffic = traffic.filter(t => t.y < H + carH);
+  }
+
+  function drawCar(x, y, color){
+    ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8;
+    roundRect(x - carW/2, y, carW, carH, 8); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(10,15,25,0.7)';
+    roundRect(x - carW/2 + 5, y + 10, carW - 10, 20, 4); ctx.fill();
+    roundRect(x - carW/2 + 5, y + carH - 26, carW - 10, 16, 4); ctx.fill();
+  }
+  function roundRect(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    // road
+    ctx.fillStyle = '#111827'; ctx.fillRect(laneW*0.15, 0, W - laneW*0.3, H);
+    // lane dashes
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 4; ctx.setLineDash([28, 32]); ctx.lineDashOffset = -roadY;
+    for(let i = 1; i < LANES; i++){ ctx.beginPath(); ctx.moveTo(i*laneW, 0); ctx.lineTo(i*laneW, H); ctx.stroke(); }
+    ctx.setLineDash([]);
+    traffic.forEach(t => drawCar(laneCenter(t.lane), t.y, t.color));
+    drawCar(playerX, H - carH - 16, '#4ade80');
+    ctx.fillStyle = 'rgba(245,240,255,0.95)'; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(Math.floor(dist) + ' m', 14, 26);
+  }
+
+  function frame(){ update(); draw(); raf = requestAnimationFrame(frame); }
+
+  function gameOver(){
+    running = false; cancelAnimationFrame(raf);
+    const score = Math.floor(dist);
+    awardCoins(Math.floor(score / 50));
+    document.getElementById('rcStatus').textContent = 'Crashed — distance: ' + score + ' m';
+    const record = isNewRecord('racer', score, false);
+    document.getElementById('rcControls').innerHTML =
+      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <input id="rcName" placeholder="Your name" maxlength="16" />
+        <button class="btn btn-small btn-primary" id="rcSave">Save Score</button>
+        <button class="btn btn-small btn-ghost" id="rcRestart">Play Again</button>
+      </div>`;
+    document.getElementById('rcSave').addEventListener('click', async () => {
+      const name = document.getElementById('rcName').value.trim() || 'Anonymous';
+      await saveScore('racer', name, score, false);
+      document.getElementById('rcLB').innerHTML = leaderboardHTML('racer','m');
+      document.getElementById('rcSave').disabled = true;
+    });
+    document.getElementById('rcRestart').addEventListener('click', () => {
+      reset(); document.getElementById('rcControls').innerHTML = '';
+      document.getElementById('rcStatus').textContent = '← → or A/D to switch lanes. Don\'t crash.';
+      raf = requestAnimationFrame(frame);
+    });
+  }
+
+  function keyHandler(e){
+    const k = e.key.toLowerCase();
+    if(k === 'arrowleft' || k === 'a'){ lane = Math.max(0, lane - 1); e.preventDefault(); }
+    else if(k === 'arrowright' || k === 'd'){ lane = Math.min(LANES - 1, lane + 1); e.preventDefault(); }
+  }
+  document.addEventListener('keydown', keyHandler);
+  function onTap(e){ const rect = canvas.getBoundingClientRect(); const x = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) * (W/rect.width); if(x < playerX) lane = Math.max(0, lane - 1); else lane = Math.min(LANES - 1, lane + 1); }
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); onTap(e); }, { passive:false });
+  canvas.addEventListener('mousedown', onTap);
+
+  raf = requestAnimationFrame(frame);
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', keyHandler); };
 }
 
 /* ---------- Spin The Wheel ---------- */
