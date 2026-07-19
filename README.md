@@ -6,7 +6,8 @@ A neon, player-built arcade you host yourself. Play a floor full of mini-games, 
 
 ## Features
 
-- **12 built-in games** — Reflex Tap, Memory Match, Math Blitz, Tic-Tac-Toe Duel, Dino Run, Geometry Jump, Neon Obby (parkour obstacle course), Neon Snake, 2048, Flappy Neon, Color Rush, and Mole Smash.
+- **15 built-in games** — Reflex Tap, Memory Match, Math Blitz, Tic-Tac-Toe Duel, Dino Run, Geometry Jump, Neon Obby (parkour obstacle course), Neon Snake, 2048, Flappy Neon, Neon Pong (online 1v1), Blade Ball (online reflex duel), Fireboy & Watergirl (2-player co-op), Color Rush, and Mole Smash.
+- **Real-time online multiplayer** — Neon Pong and Blade Ball are server-authoritative 1v1 games with quick match and private room codes; Tic-Tac-Toe Duel is turn-based online. Fireboy & Watergirl is 2-player co-op on one keyboard.
 - **Real online multiplayer** — Tic-Tac-Toe Duel now plays against real people over the network:
   - **Quick Match** — get paired with the next person looking for a game.
   - **Private rooms** — create a 4-letter code and share it with a friend.

@@ -22,7 +22,9 @@ window.ArcadeNet = (function () {
   if (socket) {
     ['presence', 'score:update', 'cabinet:update',
       'mp:waiting', 'mp:matched', 'mp:state', 'mp:opponent_left',
-      'mp:error', 'mp:rematch_vote'].forEach((evt) => {
+      'mp:error', 'mp:rematch_vote',
+      'rt:waiting', 'rt:matched', 'rt:state', 'rt:over',
+      'rt:opponent_left', 'rt:error'].forEach((evt) => {
       socket.on(evt, (data) => fire(evt, data));
     });
   }
@@ -122,7 +124,16 @@ window.ArcadeNet = (function () {
     leave() { if (socket) socket.emit('mp:leave'); },
   };
 
+  const rt = {
+    available: !!socket,
+    quickMatch(game, name) { if (socket) socket.emit('rt:quickmatch', { game, name }); },
+    createRoom(game, name) { if (socket) socket.emit('rt:create', { game, name }); },
+    joinRoom(game, code, name) { if (socket) socket.emit('rt:join', { game, code, name }); },
+    input(data) { if (socket) socket.emit('rt:input', data); },
+    leave() { if (socket) socket.emit('rt:leave'); },
+  };
+
   return {
-    hasServer, on, fetchFloor, postScore, postCabinet, deleteCabinet, mp,
+    hasServer, on, fetchFloor, postScore, postCabinet, deleteCabinet, mp, rt,
   };
 }());

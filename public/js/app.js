@@ -13,6 +13,9 @@ const BUILTIN_GAMES = [
   { id:'snake', title:'Neon Snake', creator:'The Floor', pitch:'Eat the pellets, grow the tail, and don\'t crush yourself. The classic, with a neon glow.', emoji:'🐍', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'green', builtin:true },
   { id:'twenty48', title:'2048', creator:'The Floor', pitch:'Slide the tiles, merge matching numbers, and chase the elusive 2048 tile.', emoji:'🧮', pace:'slow', type:'puzzle', players:'solo', difficulty:'medium', accent:'yellow', builtin:true },
   { id:'flappy', title:'Flappy Neon', creator:'The Floor', pitch:'One button, endless pipes. Tap to flap and thread the gaps for as long as your nerves hold.', emoji:'🐤', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'cyan', builtin:true },
+  { id:'pong', title:'Neon Pong', creator:'The Floor', pitch:'Real-time online 1v1. Quick match or share a room code, then rally past your friend to 7.', emoji:'🏓', pace:'fast', type:'reflex', players:'multi', difficulty:'medium', accent:'cyan', builtin:true },
+  { id:'blade', title:'Blade Ball', creator:'The Floor', pitch:'Online reflex duel — the ball rockets between you two, parry in time or you\'re out. It speeds up every hit.', emoji:'⚔️', pace:'fast', type:'reflex', players:'multi', difficulty:'hard', accent:'pink', builtin:true },
+  { id:'firewater', title:'Fireboy & Watergirl', creator:'The Floor', pitch:'Two-player co-op on one keyboard. Fireboy (arrows) and Watergirl (WASD) grab the gems and reach their doors.', emoji:'🔥', pace:'slow', type:'strategy', players:'multi', difficulty:'medium', accent:'yellow', builtin:true },
   { id:'color-rush', title:'Color Rush', creator:'The Floor', pitch:'A color flashes, four buttons appear — smash the right one before the clock runs out.', emoji:'🎨', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true, lockable:true },
   { id:'mole-smash', title:'Mole Smash', creator:'The Floor', pitch:'Nine holes, one mole, nowhere near enough time. Tap it before it ducks.', emoji:'🐹', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true, lockable:true },
 ];
@@ -303,6 +306,9 @@ function openBuiltinGame(id){
   if(id === 'snake') return openSnake();
   if(id === 'twenty48') return openTwenty48();
   if(id === 'flappy') return openFlappy();
+  if(id === 'pong') return openPong();
+  if(id === 'blade') return openBladeBall();
+  if(id === 'firewater') return openFireWater();
   if(id === 'color-rush') return openColorRush();
   if(id === 'mole-smash') return openMoleSmash();
 }
@@ -2070,6 +2076,425 @@ function openFlappy(){
   activeGameCleanup = () => { running = false; cancelAnimationFrame(rafId); document.removeEventListener('keydown', keyHandler); };
 
   draw();
+}
+
+/* ---------- Realtime online lobby (shared by Pong & Blade Ball) ---------- */
+function openRealtimeLobby(cfg){
+  if(!ArcadeNet.rt.available){
+    openModal(`
+      <h3>${cfg.emoji} ${escapeHTML(cfg.title)}</h3>
+      <p class="ttt-status">The floor server isn't connected, so online play is unavailable. Open the hosted link (or run the app with <code>npm start</code>) to duel a friend.</p>
+    `);
+    return;
+  }
+  openModal(`
+    <h3>${cfg.emoji} ${escapeHTML(cfg.title)}</h3>
+    <div class="field" style="margin-bottom:16px;">
+      <label for="rtName">Your name</label>
+      <input type="text" id="rtName" maxlength="16" placeholder="Player" value="${escapeHTML(getSavedName())}" />
+    </div>
+    <p class="ttt-status">${escapeHTML(cfg.blurb)}</p>
+    <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:8px;">
+      <button class="btn btn-small btn-primary" id="rtQuick">&#9889; Quick Match</button>
+      <button class="btn btn-small btn-ghost" id="rtCreate">&#128274; Create Private Room</button>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="rtCode" maxlength="4" placeholder="CODE" style="flex:1; text-transform:uppercase; background:var(--void); border:1px solid var(--panel-edge); border-radius:8px; padding:9px 12px; color:var(--text); font-family:var(--font-mono);" />
+        <button class="btn btn-small btn-ghost" id="rtJoin">Join</button>
+      </div>
+    </div>
+    <p class="lb-empty" style="text-align:center;">Two players needed — open the link on another device/tab.</p>
+  `);
+  const nameInput = document.getElementById('rtName');
+  const getName = () => { const n = nameInput.value.trim() || 'Player'; saveName(n); return n; };
+  document.getElementById('rtQuick').addEventListener('click', () => cfg.play('quick', getName()));
+  document.getElementById('rtCreate').addEventListener('click', () => cfg.play('create', getName()));
+  document.getElementById('rtJoin').addEventListener('click', () => {
+    const code = document.getElementById('rtCode').value.trim().toUpperCase();
+    if(code.length < 4) return;
+    cfg.play('join', getName(), code);
+  });
+}
+
+/* ---------- Neon Pong (real-time online 1v1) ---------- */
+function openPong(){
+  openRealtimeLobby({
+    game:'pong', title:'Neon Pong', emoji:'🏓',
+    blurb:'Real-time 1v1 — first to 7 wins. Move with your mouse or the arrow keys.',
+    play:(mode,name,code) => openPongOnline(mode,name,code),
+  });
+}
+function openPongOnline(mode, name, code){
+  const W = 600, H = 360, PADDLE_H = 74, PADDLE_W = 12, BALL_R = 8;
+  openModal(`
+    <h3>&#127955; Neon Pong</h3>
+    <p class="ttt-status" id="pgStatus">Connecting...</p>
+    <div id="pgRoom" style="text-align:center; margin-bottom:8px;"></div>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="pgCanvas" width="${W}" height="${H}" style="max-width:100%; background:var(--void); border:1px solid var(--panel-edge); border-radius:10px; cursor:none;"></canvas>
+    </div>
+    <div id="pgCoin" style="text-align:center;"></div>
+    <div style="text-align:center; margin-top:12px;">
+      <button class="btn btn-small btn-ghost" id="pgBack">Leave</button>
+    </div>
+  `);
+  const canvas = document.getElementById('pgCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('pgStatus');
+  const roomEl = document.getElementById('pgRoom');
+  let mySide = null, opponent = null, over = false, awarded = false;
+  let st = { ball:{x:W/2,y:H/2}, paddles:{left:H/2,right:H/2}, score:{left:0,right:0}, serving:true };
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.setLineDash([8,12]); ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = mySide === 'left' ? '#22d3ee' : '#64748b';
+    ctx.fillRect(20, st.paddles.left - PADDLE_H/2, PADDLE_W, PADDLE_H);
+    ctx.fillStyle = mySide === 'right' ? '#22d3ee' : '#64748b';
+    ctx.fillRect(W-20-PADDLE_W, st.paddles.right - PADDLE_H/2, PADDLE_W, PADDLE_H);
+    ctx.fillStyle = '#f472b6';
+    ctx.beginPath(); ctx.arc(st.ball.x, st.ball.y, BALL_R, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '28px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(st.score.left, W/2 - 40, 40);
+    ctx.fillText(st.score.right, W/2 + 40, 40);
+  }
+  draw();
+
+  function sendPaddle(clientY){
+    if(over || !mySide) return;
+    const rect = canvas.getBoundingClientRect();
+    const y = (clientY - rect.top) * (H / rect.height);
+    ArcadeNet.rt.input({ paddle: Math.max(0, Math.min(H, y)) });
+  }
+  function onMove(e){ sendPaddle(e.clientY); }
+  function onTouch(e){ e.preventDefault(); if(e.touches[0]) sendPaddle(e.touches[0].clientY); }
+  canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('touchmove', onTouch, { passive:false });
+  let keyDir = 0;
+  function keyDown(e){ if(e.key==='ArrowUp'){keyDir=-1;e.preventDefault();} else if(e.key==='ArrowDown'){keyDir=1;e.preventDefault();} }
+  function keyUp(e){ if(e.key==='ArrowUp'||e.key==='ArrowDown') keyDir=0; }
+  document.addEventListener('keydown', keyDown);
+  document.addEventListener('keyup', keyUp);
+  let keyTimer = setInterval(() => {
+    if(keyDir && mySide && !over){
+      const cur = st.paddles[mySide] + keyDir * 14;
+      ArcadeNet.rt.input({ paddle: Math.max(0, Math.min(H, cur)) });
+    }
+  }, 40);
+
+  const unsubs = [];
+  unsubs.push(ArcadeNet.on('rt:waiting', (d) => {
+    if(d && d.mode === 'room' && d.code){
+      statusEl.textContent = 'Share this code with a friend:';
+      roomEl.innerHTML = `<span style="font-family:var(--font-display); font-size:22px; color:var(--yellow); letter-spacing:4px;">${escapeHTML(d.code)}</span>`;
+    } else { statusEl.textContent = 'Searching for an opponent...'; }
+  }));
+  unsubs.push(ArcadeNet.on('rt:matched', (d) => {
+    mySide = d.side; opponent = d.opponent; over = false; awarded = false;
+    roomEl.innerHTML = `You're <strong style="color:var(--cyan);">${mySide === 'left' ? 'left' : 'right'}</strong> vs <strong>${escapeHTML(opponent)}</strong>`;
+    statusEl.textContent = 'First to 7. Go!';
+  }));
+  unsubs.push(ArcadeNet.on('rt:state', (d) => { st = d; draw(); }));
+  unsubs.push(ArcadeNet.on('rt:over', (d) => {
+    over = true;
+    const iWon = d.winner === mySide;
+    statusEl.textContent = iWon ? 'You win the match! 🏆' : `${escapeHTML(opponent || 'Opponent')} takes it.`;
+    if(iWon && !awarded){ awarded = true; awardCoins(d.coins || 0); document.getElementById('pgCoin').innerHTML = coinToastHTML(d.coins || 0); }
+  }));
+  unsubs.push(ArcadeNet.on('rt:opponent_left', () => { over = true; statusEl.textContent = 'Your opponent left.'; }));
+  unsubs.push(ArcadeNet.on('rt:error', (d) => { statusEl.textContent = (d && d.message) || 'Something went wrong.'; }));
+
+  document.getElementById('pgBack').addEventListener('click', () => openPong());
+  activeGameCleanup = () => {
+    unsubs.forEach(u => u());
+    clearInterval(keyTimer);
+    document.removeEventListener('keydown', keyDown);
+    document.removeEventListener('keyup', keyUp);
+    ArcadeNet.rt.leave();
+  };
+
+  if(mode === 'quick') ArcadeNet.rt.quickMatch('pong', name);
+  else if(mode === 'create') ArcadeNet.rt.createRoom('pong', name);
+  else if(mode === 'join') ArcadeNet.rt.joinRoom('pong', code, name);
+}
+
+/* ---------- Blade Ball (real-time online reflex duel) ---------- */
+function openBladeBall(){
+  openRealtimeLobby({
+    game:'blade', title:'Blade Ball', emoji:'⚔️',
+    blurb:'The ball rockets between you two. When it comes at you, PARRY (Space / click) in time — miss and you lose.',
+    play:(mode,name,code) => openBladeOnline(mode,name,code),
+  });
+}
+function openBladeOnline(mode, name, code){
+  const W = 560, H = 170;
+  openModal(`
+    <h3>&#9876;&#65039; Blade Ball</h3>
+    <p class="ttt-status" id="blStatus">Connecting...</p>
+    <div id="blRoom" style="text-align:center; margin-bottom:8px;"></div>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="blCanvas" width="${W}" height="${H}" style="max-width:100%; background:var(--void); border:1px solid var(--panel-edge); border-radius:10px;"></canvas>
+    </div>
+    <div style="text-align:center; margin-top:10px;">
+      <button class="btn btn-primary" id="blParry" style="display:none;">&#9876;&#65039; PARRY!</button>
+    </div>
+    <div id="blCoin" style="text-align:center;"></div>
+    <div style="text-align:center; margin-top:12px;">
+      <button class="btn btn-small btn-ghost" id="blBack">Leave</button>
+    </div>
+  `);
+  const canvas = document.getElementById('blCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('blStatus');
+  const roomEl = document.getElementById('blRoom');
+  const parryBtn = document.getElementById('blParry');
+  let mySide = null, opponent = null, over = false, awarded = false;
+  let st = { t:0.5, dir:1, hits:0, danger:null, started:false };
+
+  const LX = 60, RX = W - 60;
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // track
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(LX, H/2); ctx.lineTo(RX, H/2); ctx.stroke();
+    // avatars
+    const drawFighter = (x, side) => {
+      const mine = side === mySide;
+      const inDanger = st.danger === side;
+      ctx.fillStyle = inDanger ? '#f43f5e' : (mine ? '#22d3ee' : '#a3a3a3');
+      ctx.beginPath(); ctx.arc(x, H/2, 22, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(mine ? 'YOU' : (side === 'left' ? 'L' : 'R'), x, H/2 + 42);
+    };
+    drawFighter(LX, 'left');
+    drawFighter(RX, 'right');
+    // ball
+    const bx = LX + st.t * (RX - LX);
+    ctx.fillStyle = '#facc15';
+    ctx.shadowColor = '#facc15'; ctx.shadowBlur = 16;
+    ctx.beginPath(); ctx.arc(bx, H/2, 12, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '13px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('Rally: ' + st.hits, W/2, 24);
+  }
+  draw();
+
+  let raf = null;
+  function loop(){ draw(); raf = requestAnimationFrame(loop); }
+  loop();
+
+  function parry(){ if(!over && st.danger === mySide) ArcadeNet.rt.input({ type:'parry' }); }
+  parryBtn.addEventListener('click', parry);
+  function keyHandler(e){ if(e.code === 'Space'){ e.preventDefault(); parry(); } }
+  document.addEventListener('keydown', keyHandler);
+  canvas.addEventListener('mousedown', parry);
+
+  const unsubs = [];
+  unsubs.push(ArcadeNet.on('rt:waiting', (d) => {
+    if(d && d.mode === 'room' && d.code){
+      statusEl.textContent = 'Share this code with a friend:';
+      roomEl.innerHTML = `<span style="font-family:var(--font-display); font-size:22px; color:var(--yellow); letter-spacing:4px;">${escapeHTML(d.code)}</span>`;
+    } else { statusEl.textContent = 'Searching for an opponent...'; }
+  }));
+  unsubs.push(ArcadeNet.on('rt:matched', (d) => {
+    mySide = d.side; opponent = d.opponent; over = false; awarded = false;
+    roomEl.innerHTML = `You're the <strong style="color:var(--cyan);">${mySide}</strong> fighter vs <strong>${escapeHTML(opponent)}</strong>`;
+    statusEl.textContent = 'Get ready...';
+  }));
+  unsubs.push(ArcadeNet.on('rt:state', (d) => {
+    st = d;
+    if(over) return;
+    if(st.danger === mySide){ parryBtn.style.display = 'inline-flex'; statusEl.textContent = 'PARRY NOW!'; }
+    else { parryBtn.style.display = 'none'; statusEl.textContent = st.started ? (st.dir === (mySide==='left'?1:-1) ? 'You sent it — watch out for the return.' : 'Incoming...') : 'Get ready...'; }
+  }));
+  unsubs.push(ArcadeNet.on('rt:over', (d) => {
+    over = true; parryBtn.style.display = 'none';
+    const iWon = d.winner === mySide;
+    statusEl.textContent = iWon ? 'You win the duel! 🏆' : `${escapeHTML(opponent || 'Opponent')} wins — you got hit.`;
+    if(iWon && !awarded){ awarded = true; awardCoins(d.coins || 0); document.getElementById('blCoin').innerHTML = coinToastHTML(d.coins || 0); }
+  }));
+  unsubs.push(ArcadeNet.on('rt:opponent_left', () => { over = true; parryBtn.style.display = 'none'; statusEl.textContent = 'Your opponent left.'; }));
+  unsubs.push(ArcadeNet.on('rt:error', (d) => { statusEl.textContent = (d && d.message) || 'Something went wrong.'; }));
+
+  document.getElementById('blBack').addEventListener('click', () => openBladeBall());
+  activeGameCleanup = () => {
+    unsubs.forEach(u => u());
+    cancelAnimationFrame(raf);
+    document.removeEventListener('keydown', keyHandler);
+    ArcadeNet.rt.leave();
+  };
+
+  if(mode === 'quick') ArcadeNet.rt.quickMatch('blade', name);
+  else if(mode === 'create') ArcadeNet.rt.createRoom('blade', name);
+  else if(mode === 'join') ArcadeNet.rt.joinRoom('blade', code, name);
+}
+
+/* ---------- Fireboy & Watergirl (local 2-player co-op) ---------- */
+function openFireWater(){
+  const W = 640, H = 360;
+  openModal(`
+    <h3>&#128293;&#128167; Fireboy & Watergirl</h3>
+    <p class="ttt-status" id="fwStatus">Fireboy = Arrow keys &nbsp;•&nbsp; Watergirl = W A D. Grab every gem, then reach your matching door. Fire dies in water, water dies in fire, green goo kills both.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="fwCanvas" width="${W}" height="${H}" style="max-width:100%; background:var(--void); border:1px solid var(--panel-edge); border-radius:10px;"></canvas>
+    </div>
+    <div id="fwEnd" style="text-align:center; margin-top:12px;"></div>
+  `);
+  const canvas = document.getElementById('fwCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('fwStatus');
+
+  // Platforms: [x,y,w,h]
+  const platforms = [
+    [0, H-24, W, 24],
+    [0, 0, 16, H], [W-16, 0, 16, H],
+    [90, 268, 150, 16],
+    [400, 268, 150, 16],
+    [180, 190, 280, 16],
+    [60, 120, 140, 16],
+    [440, 120, 140, 16],
+  ];
+  // Hazard pools: {x,y,w,h,type} type: 'fire'|'water'|'goo'
+  const hazards = [
+    { x:250, y:H-40, w:60, h:16, type:'water' },
+    { x:340, y:H-40, w:60, h:16, type:'fire' },
+    { x:290, y:174, w:60, h:16, type:'goo' },
+  ];
+  const doors = [
+    { x:70, y:78, type:'fire' },
+    { x:530, y:78, type:'water' },
+  ];
+  let gems = [
+    { x:150, y:240, type:'fire' }, { x:470, y:240, type:'water' },
+    { x:110, y:92, type:'fire' }, { x:500, y:92, type:'water' },
+    { x:300, y:160, type:'fire' }, { x:330, y:160, type:'water' },
+  ];
+
+  function mkPlayer(x, type){ return { x, y:H-56, w:20, h:26, vx:0, vy:0, onGround:false, type, alive:true, atDoor:false }; }
+  const fire = mkPlayer(40, 'fire');
+  const water = mkPlayer(W-60, 'water');
+  const keys = {};
+  function kd(e){ keys[e.key.toLowerCase()] = true; if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault(); }
+  function ku(e){ keys[e.key.toLowerCase()] = false; }
+  document.addEventListener('keydown', kd);
+  document.addEventListener('keyup', ku);
+
+  let running = true, raf = null;
+  const GRAV = 0.7, MOVE = 3.2, JUMP = 12;
+
+  function overlap(a, b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+  function movePlayer(p, left, right, up){
+    if(!p.alive) return;
+    p.vx = 0;
+    if(keys[left]) p.vx = -MOVE;
+    if(keys[right]) p.vx = MOVE;
+    if(keys[up] && p.onGround){ p.vy = -JUMP; p.onGround = false; }
+    p.vy += GRAV;
+    // horizontal
+    p.x += p.vx;
+    for(const pl of platforms){
+      const box = { x:pl[0], y:pl[1], w:pl[2], h:pl[3] };
+      if(overlap(p, box)){
+        if(p.vx > 0) p.x = box.x - p.w; else if(p.vx < 0) p.x = box.x + box.w;
+      }
+    }
+    // vertical
+    p.y += p.vy; p.onGround = false;
+    for(const pl of platforms){
+      const box = { x:pl[0], y:pl[1], w:pl[2], h:pl[3] };
+      if(overlap(p, box)){
+        if(p.vy > 0){ p.y = box.y - p.h; p.vy = 0; p.onGround = true; }
+        else if(p.vy < 0){ p.y = box.y + box.h; p.vy = 0; }
+      }
+    }
+    // hazards
+    for(const hz of hazards){
+      if(overlap(p, { x:hz.x, y:hz.y, w:hz.w, h:hz.h })){
+        if(hz.type === 'goo') p.alive = false;
+        else if(hz.type !== p.type) p.alive = false;
+      }
+    }
+    // gems (each player collects own colour)
+    gems = gems.filter(gm => {
+      if(gm.type === p.type && overlap(p, { x:gm.x, y:gm.y, w:14, h:14 })) return false;
+      return true;
+    });
+    // door
+    const door = doors.find(d => d.type === p.type);
+    p.atDoor = overlap(p, { x:door.x, y:door.y, w:34, h:44 });
+  }
+
+  function endGame(win){
+    running = false;
+    cancelAnimationFrame(raf);
+    if(win){
+      statusEl.textContent = 'You cleared the level together! 🎉';
+      awardCoins(14);
+      document.getElementById('fwEnd').innerHTML = coinToastHTML(14) +
+        '<button class="btn btn-small btn-primary" id="fwAgain">Play again</button>';
+    } else {
+      statusEl.textContent = 'One of you touched the wrong element. Try again!';
+      document.getElementById('fwEnd').innerHTML =
+        '<button class="btn btn-small btn-primary" id="fwAgain">Try again</button>';
+    }
+    const again = document.getElementById('fwAgain');
+    if(again) again.addEventListener('click', () => { cleanup(); openFireWater(); });
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // platforms
+    ctx.fillStyle = '#334155';
+    for(const pl of platforms) ctx.fillRect(pl[0], pl[1], pl[2], pl[3]);
+    // hazards
+    for(const hz of hazards){
+      ctx.fillStyle = hz.type === 'fire' ? 'rgba(239,68,68,0.7)' : hz.type === 'water' ? 'rgba(56,189,248,0.7)' : 'rgba(132,204,22,0.8)';
+      ctx.fillRect(hz.x, hz.y, hz.w, hz.h);
+    }
+    // doors
+    for(const d of doors){
+      ctx.fillStyle = d.type === 'fire' ? 'rgba(239,68,68,0.35)' : 'rgba(56,189,248,0.35)';
+      ctx.fillRect(d.x, d.y, 34, 44);
+      ctx.strokeStyle = d.type === 'fire' ? '#ef4444' : '#38bdf8'; ctx.lineWidth = 2;
+      ctx.strokeRect(d.x, d.y, 34, 44);
+    }
+    // gems
+    for(const gm of gems){
+      ctx.fillStyle = gm.type === 'fire' ? '#ef4444' : '#38bdf8';
+      ctx.beginPath();
+      ctx.moveTo(gm.x+7, gm.y); ctx.lineTo(gm.x+14, gm.y+7); ctx.lineTo(gm.x+7, gm.y+14); ctx.lineTo(gm.x, gm.y+7);
+      ctx.closePath(); ctx.fill();
+    }
+    // players
+    const drawP = (p) => {
+      ctx.fillStyle = p.type === 'fire' ? '#ef4444' : '#38bdf8';
+      ctx.globalAlpha = p.alive ? 1 : 0.3;
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.globalAlpha = 1;
+    };
+    drawP(fire); drawP(water);
+  }
+
+  function tick(){
+    if(!running) return;
+    movePlayer(fire, 'arrowleft', 'arrowright', 'arrowup');
+    movePlayer(water, 'a', 'd', 'w');
+    if(!fire.alive || !water.alive){ draw(); endGame(false); return; }
+    if(fire.atDoor && water.atDoor && gems.length === 0){ draw(); endGame(true); return; }
+    draw();
+    raf = requestAnimationFrame(tick);
+  }
+  tick();
+
+  function cleanup(){
+    running = false;
+    cancelAnimationFrame(raf);
+    document.removeEventListener('keydown', kd);
+    document.removeEventListener('keyup', ku);
+  }
+  activeGameCleanup = cleanup;
 }
 
 /* ---------- Spin The Wheel ---------- */

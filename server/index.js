@@ -7,6 +7,7 @@ import {
   loadStore, getFloor, addScore, addCabinet, removeCabinet,
 } from './store.js';
 import { MultiplayerManager } from './multiplayer.js';
+import { RealtimeManager } from './realtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', 'public');
@@ -20,6 +21,7 @@ app.use(express.static(PUBLIC_DIR));
 const server = http.createServer(app);
 const io = new Server(server);
 const mp = new MultiplayerManager(io);
+const rt = new RealtimeManager(io);
 
 let online = 0;
 
@@ -74,6 +76,7 @@ io.on('connection', (socket) => {
   online += 1;
   broadcastPresence();
   mp.register(socket);
+  rt.register(socket);
 
   socket.on('disconnect', () => {
     online = Math.max(0, online - 1);
