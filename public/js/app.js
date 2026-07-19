@@ -2877,7 +2877,7 @@ function openHoops(){
   const rim = { x: W/2, y: 130, w: 74 };
   let ball, flying, score, timeLeft, running, raf, timer, dragging, aim, scoredThisShot, moveHoop, hoopDir;
 
-  function resetBall(){ ball = { x: W/2, y: H - 60, vx: 0, vy: 0 }; flying = false; scoredThisShot = false; aim = null; }
+  function resetBall(){ ball = { x: W/2, y: H - 130, vx: 0, vy: 0 }; flying = false; scoredThisShot = false; aim = null; }
   function reset(){ resetBall(); score = 0; timeLeft = 30; running = true; moveHoop = false; hoopDir = 1; dragging = false; }
   reset();
 
@@ -2962,7 +2962,7 @@ function openHoops(){
     dragging = false; aim = null;
   }
   canvas.addEventListener('mousedown', down);
-  canvas.addEventListener('mousemove', moveD);
+  window.addEventListener('mousemove', moveD);
   window.addEventListener('mouseup', up);
   canvas.addEventListener('touchstart', (e) => { e.preventDefault(); down(e); }, { passive:false });
   canvas.addEventListener('touchmove', moveD, { passive:false });
@@ -2996,7 +2996,7 @@ function openHoops(){
   raf = requestAnimationFrame(frame);
   activeGameCleanup = () => {
     running = false; cancelAnimationFrame(raf); clearInterval(timer);
-    canvas.removeEventListener('mousedown', down); canvas.removeEventListener('mousemove', moveD); window.removeEventListener('mouseup', up);
+    canvas.removeEventListener('mousedown', down); window.removeEventListener('mousemove', moveD); window.removeEventListener('mouseup', up);
   };
 }
 
