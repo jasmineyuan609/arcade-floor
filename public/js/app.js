@@ -945,16 +945,19 @@ function openDinoRun(){
   const canvas = document.getElementById('runnerCanvas');
   const ctx = canvas.getContext('2d');
   const W = 460, H = 200, groundY = 160;
-  const playerW = 34, playerH = 34, playerX = 50;
+  const playerW = 34, playerH = 34, playerX = 60, aiX = 20;
   const obstacleColor = '#ffcc33', groundColor = '#3a2359';
   const baseSpeed = 3, maxSpeed = 9, gravity = 0.6, jumpVelocity = -11;
 
   let playerY, vy, grounded, obstacles, spawnTimer, frame, speed, score, started, running, rafId, particles, shake;
+  let vsAI = false, modeChosen = false, ai, aiScore = 0;
 
   function reset(){
     playerY = groundY - playerH; vy = 0; grounded = true;
     obstacles = []; spawnTimer = 60; frame = 0; speed = baseSpeed;
     score = 0; started = false; running = false; particles = []; shake = 0;
+    ai = { y: groundY - playerH, vy: 0, grounded: true, alive: true };
+    aiScore = 0;
   }
   reset();
 
@@ -987,6 +990,19 @@ function openDinoRun(){
     obstacles.forEach(o => { o.x -= speed; });
     obstacles = obstacles.filter(o => o.x + o.width > 0);
 
+    if(vsAI && ai.alive){
+      ai.vy += gravity; ai.y += ai.vy;
+      if(ai.y >= groundY - playerH){ ai.y = groundY - playerH; ai.vy = 0; ai.grounded = true; }
+      let n = null;
+      for(const o of obstacles){ if(o.x + o.width > aiX && (!n || o.x < n.x)) n = o; }
+      if(n){ const d = n.x - (aiX + playerW); if(d < 52 + Math.random()*12 && d > -6 && ai.grounded && Math.random() > 0.05){ ai.vy = jumpVelocity; ai.grounded = false; } }
+      const aiRect = { x: aiX, y: ai.y, w: playerW, h: playerH };
+      for(const o of obstacles){
+        const oRect = { x: o.x, y: groundY-o.height, w: o.width, h: o.height };
+        if(rectsOverlap(aiRect, oRect)){ ai.alive = false; aiScore = score; document.getElementById('runnerStatus').textContent = 'AI crashed at ' + aiScore + ' — keep going!'; break; }
+      }
+    }
+
     particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--; });
     particles = particles.filter(p => p.life > 0);
     if(shake > 0.1) shake *= 0.85; else shake = 0;
@@ -1011,6 +1027,12 @@ function openDinoRun(){
     ctx.strokeStyle = groundColor;
     ctx.beginPath(); ctx.moveTo(0,groundY); ctx.lineTo(W,groundY); ctx.stroke();
 
+    if(vsAI){
+      ctx.globalAlpha = ai.alive ? 0.55 : 0.2;
+      drawDino(ctx, aiX, ai.y, playerW, playerH, '#a78bfa', ai.alive && ai.grounded ? frame : 0);
+      ctx.globalAlpha = 1;
+      if(ai.alive){ ctx.fillStyle = '#a78bfa'; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.fillText('AI', aiX+playerW/2, ai.y-4); ctx.textAlign = 'left'; }
+    }
     drawDino(ctx, playerX, playerY, playerW, playerH, dinoColor, grounded ? frame : 0);
 
     ctx.fillStyle = obstacleColor;
@@ -1026,11 +1048,14 @@ function openDinoRun(){
     ctx.fillStyle = '#f5f0ff';
     ctx.font = '12px "JetBrains Mono", monospace';
     ctx.fillText('Score: ' + score, W-100, 20);
+    if(vsAI) ctx.fillText(ai.alive ? 'AI: ' + score : 'AI out @ ' + aiScore, W-100, 36);
 
     if(!started){
       ctx.fillStyle = 'rgba(245,240,255,0.85)';
       ctx.font = '13px "JetBrains Mono", monospace';
-      ctx.fillText('Click / tap / space to start', 90, H/2);
+      ctx.textAlign = 'center';
+      ctx.fillText(modeChosen ? 'Click / tap / space to start' : 'Pick Solo or Race the AI below', W/2, H/2);
+      ctx.textAlign = 'left';
     }
     ctx.restore();
   }
@@ -1042,8 +1067,29 @@ function openDinoRun(){
     rafId = requestAnimationFrame(loop);
   }
 
+  function showModes(){
+    modeChosen = false;
+    reset();
+    document.getElementById('runnerStatus').textContent = 'Choose a mode to start.';
+    document.getElementById('runnerControls').innerHTML = `
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <button class="btn btn-small btn-primary" id="runnerSolo">&#127939; Solo run</button>
+        <button class="btn btn-small btn-ghost" id="runnerVs">&#129302; Race the AI</button>
+      </div>`;
+    document.getElementById('runnerSolo').addEventListener('click', () => startMode(false));
+    document.getElementById('runnerVs').addEventListener('click', () => startMode(true));
+    draw();
+  }
+  function startMode(vs){
+    vsAI = vs; modeChosen = true; reset();
+    document.getElementById('runnerControls').innerHTML = '';
+    document.getElementById('runnerStatus').textContent = vs ? 'Race the AI! Click / tap / space to start.' : 'Click / tap / space to start.';
+    draw();
+  }
+
   function jump(){
-    if(!started){ started = true; running = true; document.getElementById('runnerStatus').textContent = 'Go!'; loop(); return; }
+    if(!modeChosen) return;
+    if(!started){ started = true; running = true; document.getElementById('runnerStatus').textContent = vsAI ? 'Go! Beat the AI.' : 'Go!'; loop(); return; }
     if(!running) return;
     if(grounded){ vy = jumpVelocity; grounded = false; burst(playerX+playerW/2, groundY, dinoColor, 6); }
   }
@@ -1052,7 +1098,9 @@ function openDinoRun(){
     running = false;
     cancelAnimationFrame(rafId);
     draw();
-    document.getElementById('runnerStatus').textContent = 'Crashed — score: ' + score;
+    let verdict = '';
+    if(vsAI) verdict = (!ai.alive && score >= aiScore) ? ' You beat the AI! 🏆' : (ai.alive ? ' The AI is still running.' : ' The AI got ' + aiScore + '.');
+    document.getElementById('runnerStatus').textContent = 'Crashed — score: ' + score + '.' + verdict;
     const record = isNewRecord('dino-run', score, false);
     const coins = Math.min(40, Math.floor(score/3));
     awardCoins(coins);
@@ -1069,12 +1117,7 @@ function openDinoRun(){
       document.getElementById('runnerLB').innerHTML = leaderboardHTML('dino-run','pts');
       document.getElementById('runnerSave').disabled = true;
     });
-    document.getElementById('runnerRestart').addEventListener('click', () => {
-      reset();
-      document.getElementById('runnerControls').innerHTML = '';
-      document.getElementById('runnerStatus').textContent = 'Press Space, tap, or click the game to jump.';
-      draw();
-    });
+    document.getElementById('runnerRestart').addEventListener('click', showModes);
   }
 
   function keyHandler(e){ if(e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); jump(); } }
@@ -1083,7 +1126,7 @@ function openDinoRun(){
   canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
   activeGameCleanup = () => { running = false; cancelAnimationFrame(rafId); document.removeEventListener('keydown', keyHandler); };
 
-  draw();
+  showModes();
 }
 
 /* ---------- Geometry Jump ---------- */
