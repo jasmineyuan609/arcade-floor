@@ -6,7 +6,7 @@ A neon, player-built arcade you host yourself. Play a floor full of mini-games, 
 
 ## Features
 
-- **26 built-in games** — Reflex Tap, Memory Match, Math Blitz, Tic-Tac-Toe Duel, Dino Run, Geometry Jump, Neon Obby (parkour obstacle course), Neon Snake, 2048, Flappy Neon, Neon Pong (online 1v1), Blade Ball (online reflex duel), Fireboy & Watergirl (2-player co-op, level-select map + saved progress), Brick Breaker, Star Blaster (space shooter), Hoops (basketball), Traffic Racer, Tower Stack, Neon Simon, Sky Tower (Roblox-style vertical obby climb), Cash Clicker (idle simulator with upgrades, saves progress), Color Rush, Mole Smash, Neon Blocks (falling-block puzzle), Astro Drift, and Disaster Dash (natural-disaster survival). The coin-locked ones (unlock from the Wheel): Color Rush, Mole Smash, Neon Blocks, Astro Drift, Disaster Dash.
+- **29 built-in games** — Reflex Tap, Memory Match, Math Blitz, Tic-Tac-Toe Duel, Dino Run, Geometry Jump, Neon Obby (parkour obstacle course), Neon Snake, 2048, Flappy Neon, Neon Pong (online 1v1), Blade Ball (online reflex duel), Fireboy & Watergirl (2-player co-op, level-select map + levers/gates, moving platforms, matching diamonds + saved progress), Brick Breaker, Star Blaster (space shooter), Hoops (basketball), Traffic Racer, Tower Stack, Neon Simon, Sky Tower (Roblox-style vertical obby climb), Cash Clicker (idle simulator with upgrades, saves progress), Neon Slice (blade slicer), Tile Tap (rhythm tiles), Color Rush, Mole Smash, Neon Blocks (falling-block puzzle), Astro Drift, Disaster Dash (natural-disaster survival), and Road Cross (dodge the traffic). The coin-locked ones (unlock from the Wheel): Color Rush, Mole Smash, Neon Blocks, Astro Drift, Disaster Dash, Road Cross.
 - **Real-time online multiplayer** — Neon Pong and Blade Ball are server-authoritative 1v1 games with quick match and private room codes; Tic-Tac-Toe Duel is turn-based online. Fireboy & Watergirl is 2-player co-op on one keyboard.
 - **Real online multiplayer** — Tic-Tac-Toe Duel now plays against real people over the network:
   - **Quick Match** — get paired with the next person looking for a game.
@@ -16,7 +16,7 @@ A neon, player-built arcade you host yourself. Play a floor full of mini-games, 
 - **Shared, live leaderboards** — every score is stored server-side and pushed to all connected players instantly.
 - **Shared cabinets** — cabinets players install (paste HTML or link out) appear for everyone on the floor in real time.
 - **Live presence** — an online-player counter in the header updates as people come and go.
-- **Customizable avatars** — build a blocky character (skin, shirt, pants, hat, face) + display name; saved locally and shown on your Spin/score panels.
+- **Customizable avatars** — build a polished, shaded blocky character (skin, shirt, pants, hat, face) with 10 hats and 6 faces + display name; saved locally and shown on your Spin/score panels.
 - **Coins, prize wheels, and themes** — three wheel tiers (Spin / Mega / Diamond) with rising cost and far better theme/game odds; per-player progress saved locally in the browser.
 - **The Oracle** — answer a few questions and get matched to a cabinet.
 

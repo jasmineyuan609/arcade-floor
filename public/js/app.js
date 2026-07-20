@@ -29,6 +29,9 @@ const BUILTIN_GAMES = [
   { id:'tetris', title:'Neon Blocks', creator:'The Floor', pitch:'Rotate and slot the falling shapes to clear full lines. It only gets faster. Unlock it from the Wheel.', emoji:'🟦', pace:'fast', type:'puzzle', players:'solo', difficulty:'hard', accent:'cyan', builtin:true, lockable:true },
   { id:'asteroids', title:'Astro Drift', creator:'The Floor', pitch:'Spin, thrust, and blast the drifting rocks before they hit you. They split when you shoot them. Unlock it from the Wheel.', emoji:'☄️', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true, lockable:true },
   { id:'disaster', title:'Disaster Dash', creator:'The Floor', pitch:'Survive a neon arena as meteors rain down and the ground erupts — dodge everything as long as you can. Unlock it from the Wheel.', emoji:'🌋', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'pink', builtin:true, lockable:true },
+  { id:'slice', title:'Neon Slice', creator:'The Floor', pitch:'Swipe to slice the flying orbs into shards — but dodge the bombs. Combos come fast and furious.', emoji:'🍉', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'green', builtin:true },
+  { id:'tiles', title:'Tile Tap', creator:'The Floor', pitch:'A rhythm sprint — tap the glowing tiles in time as they rain down and speed up. One miss ends it.', emoji:'🎹', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true },
+  { id:'roadcross', title:'Road Cross', creator:'The Floor', pitch:'Hop across lanes of speeding neon traffic to the goal without getting flattened. Unlock it from the Wheel.', emoji:'🐔', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'yellow', builtin:true, lockable:true },
 ];
 
 const THEMES = [
@@ -337,6 +340,9 @@ function openBuiltinGame(id){
   if(id === 'skytower') return openSkyTower();
   if(id === 'clicker') return openCashClicker();
   if(id === 'disaster') return openDisasterDash();
+  if(id === 'slice') return openNeonSlice();
+  if(id === 'tiles') return openTileTap();
+  if(id === 'roadcross') return openRoadCross();
 }
 
 /* ---------- Reflex Tap ---------- */
@@ -2372,7 +2378,8 @@ function fwLevels(){
         [290,300,140,16],
         [70,235,140,16],[510,235,140,16]],
       pools:[{x:300,y:418,w:120,h:16,type:'goo'}],
-      gates:[], buttons:[], levers:[], movers:[],
+      gates:[{x:91,y:189,w:44,h:46,ctrl:'g1'},{x:561,y:189,w:44,h:46,ctrl:'g1'}],
+      buttons:[], levers:[{x:60,y:418,ctrl:'g1'}], movers:[],
       diamonds:[{x:120,y:345,type:'fire'},{x:560,y:345,type:'water'},
         {x:320,y:280,type:'fire'},{x:360,y:280,type:'water'},
         {x:120,y:215,type:'fire'},{x:560,y:215,type:'water'}],
@@ -2387,7 +2394,8 @@ function fwLevels(){
         [70,235,140,16],[510,235,140,16],
         [290,170,140,16]],
       pools:[{x:300,y:418,w:120,h:16,type:'goo'}],
-      gates:[], buttons:[], levers:[], movers:[],
+      gates:[], buttons:[], levers:[],
+      movers:[{x:30,y:300,w:80,h:14,x1:190,y1:300,auto:true,sp:0.02}],
       diamonds:[{x:120,y:345,type:'fire'},{x:560,y:345,type:'water'},
         {x:120,y:215,type:'fire'},{x:560,y:215,type:'water'},
         {x:320,y:150,type:'water'},{x:360,y:150,type:'fire'}],
@@ -2401,7 +2409,8 @@ function fwLevels(){
         [290,300,140,16],
         [70,235,140,16],[510,235,140,16]],
       pools:[{x:230,y:418,w:120,h:16,type:'fire'},{x:370,y:418,w:120,h:16,type:'water'}],
-      gates:[], buttons:[], levers:[], movers:[],
+      gates:[{x:91,y:189,w:44,h:46,ctrl:'g1'},{x:561,y:189,w:44,h:46,ctrl:'g1'}],
+      buttons:[], levers:[{x:60,y:418,ctrl:'g1'}], movers:[],
       diamonds:[{x:120,y:345,type:'fire'},{x:560,y:345,type:'water'},
         {x:320,y:280,type:'fire'},{x:360,y:280,type:'water'},
         {x:120,y:215,type:'fire'},{x:560,y:215,type:'water'}],
@@ -2417,12 +2426,14 @@ function fwLevels(){
         [290,170,140,16]],
       pools:[{x:150,y:418,w:110,h:16,type:'water'},{x:460,y:418,w:110,h:16,type:'fire'},
         {x:300,y:418,w:120,h:16,type:'goo'}],
-      gates:[], buttons:[], levers:[], movers:[],
+      gates:[{x:91,y:189,w:44,h:46,ctrl:'g1'},{x:561,y:189,w:44,h:46,ctrl:'g1'}],
+      buttons:[], levers:[{x:60,y:418,ctrl:'g1'}],
+      movers:[{x:18,y:300,w:60,h:14,x1:80,y1:300,auto:true,sp:0.02}],
       diamonds:[{x:120,y:345,type:'fire'},{x:560,y:345,type:'water'},
         {x:320,y:280,type:'water'},{x:360,y:280,type:'fire'},
         {x:120,y:215,type:'fire'},{x:560,y:215,type:'water'}],
       fireStart:{x:44,y:406}, waterStart:{x:652,y:406},
-      fireDoor:{x:300,y:122}, waterDoor:{x:360,y:122},
+      fireDoor:{x:95,y:187}, waterDoor:{x:565,y:187},
     },
   ];
 }
@@ -2451,7 +2462,7 @@ function openFireWaterMap(){
     <h3>&#128293;&#128167; Fireboy &amp; Watergirl</h3>
     <p class="ttt-status">Pick a temple from the map — clear one to unlock the next. Progress saves automatically. Fireboy = Arrow keys, Watergirl = W A D.</p>
     <div style="display:flex;flex-wrap:wrap;gap:0;justify-content:center;align-items:center;padding:10px 0;">${nodes}</div>
-    <p class="toast" style="text-align:center;color:var(--muted);">Each temple ramps up: more tiers, deadlier pools, and roaming energy orbs to dodge.</p>
+    <p class="toast" style="text-align:center;color:var(--muted);">Team up: flip the lever to open the locked exit doors, ride the moving platforms, and grab your matching diamonds. Each temple ramps up with deadlier pools and roaming energy orbs.</p>
   `);
   document.querySelectorAll('.fw-node').forEach(b => {
     if(b.disabled) return;
@@ -2466,7 +2477,7 @@ function openFireWater(levelIdx){
   const L = levels[li];
   openModal(`
     <h3>&#128293;&#128167; Fireboy & Watergirl</h3>
-    <p class="ttt-status" id="fwStatus">Level ${li+1}/${levels.length}: ${escapeHTML(L.name)} — Fireboy = Arrow keys, Watergirl = W A D. Climb the temple, grab your matching diamonds, and get each character to their own door. The wrong liquid (or green goo) is deadly.</p>
+    <p class="ttt-status" id="fwStatus">Level ${li+1}/${levels.length}: ${escapeHTML(L.name)} — Fireboy = Arrow keys, Watergirl = W A D. Walk into the lever to unlock the doors, ride the moving platforms, grab your matching diamonds, and get each character to their own door. The wrong liquid (or green goo) is deadly.</p>
     <div style="display:flex; justify-content:center;">
       <canvas id="fwCanvas" width="${W}" height="${H}" style="max-width:100%; background:#0b0712; border:1px solid var(--panel-edge); border-radius:10px;"></canvas>
     </div>
@@ -2481,7 +2492,7 @@ function openFireWater(levelIdx){
   const gates = L.gates.map(g => ({ ...g, open:false }));
   const buttons = L.buttons.map(b => ({ ...b, w:36, h:9, pressed:false }));
   const levers = L.levers.map(v => ({ ...v, w:26, h:14, on:false, occ:false }));
-  const movers = L.movers.map(m => ({ ...m, x0:m.x, y0:m.y, t:0, dx:0, dy:0 }));
+  const movers = L.movers.map(m => ({ ...m, x0:m.x, y0:m.y, t:0, dx:0, dy:0, phase: m.phase || 0 }));
   let diamonds = L.diamonds.map(d => ({ ...d }));
   const totalFire = diamonds.filter(d => d.type === 'fire').length;
   const totalWater = diamonds.filter(d => d.type === 'water').length;
@@ -2539,8 +2550,13 @@ function openFireWater(levelIdx){
     for(let i = 0; i < gates.length; i++) gates[i].open = active(gates[i].ctrl);
     for(const m of movers){
       const prevX = m.x, prevY = m.y;
-      const target = active(m.ctrl) ? 1 : 0;
-      m.t += Math.max(-m.sp, Math.min(m.sp, target - m.t));
+      if(m.auto){
+        m.phase += m.sp;
+        m.t = (1 - Math.cos(m.phase)) / 2; // smooth ping-pong 0..1
+      } else {
+        const target = active(m.ctrl) ? 1 : 0;
+        m.t += Math.max(-m.sp, Math.min(m.sp, target - m.t));
+      }
       m.x = m.x0 + (m.x1 - m.x0) * m.t;
       m.y = m.y0 + (m.y1 - m.y0) * m.t;
       m.dx = m.x - prevX; m.dy = m.y - prevY;
@@ -4209,6 +4225,293 @@ function openDisasterDash(){
   activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); };
 }
 
+/* ---------- Neon Slice (blade slicer) ---------- */
+function openNeonSlice(){
+  const W = 420, H = 440;
+  openModal(`
+    <h3>&#127817; Neon Slice</h3>
+    <p class="ttt-status" id="nsStatus">Swipe across the orbs to slice them. Let 3 fall or hit a &#128163; bomb and it's over.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="nsCanvas" width="${W}" height="${H}" style="max-width:100%; background:radial-gradient(circle at 50% 20%,#1a1330,#08060f); border:1px solid var(--panel-edge); border-radius:10px; touch-action:none; cursor:crosshair;"></canvas>
+    </div>
+    <div id="nsEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — most sliced wins</h4>
+    <div id="nsLB" class="lb-live" data-game="slice" data-unit="pts">${leaderboardHTML('slice','pts')}</div>
+  `);
+  const canvas = document.getElementById('nsCanvas'), ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('nsStatus');
+  let objs, parts, trail, running, raf, score, misses, spawnAcc, lastT, prev;
+
+  function reset(){
+    objs = []; parts = []; trail = []; running = true; score = 0; misses = 0; spawnAcc = 0; lastT = performance.now(); prev = null;
+    document.getElementById('nsEnd').innerHTML = ''; statusEl.textContent = 'Slice! Lives: 3';
+    raf = requestAnimationFrame(frame);
+  }
+  function spawn(){
+    const bomb = Math.random() < 0.14;
+    const x = 46 + Math.random() * (W - 92);
+    objs.push({ x, y: H + 24, vx: (W/2 - x) * 0.006 + (Math.random()-0.5)*1.6, vy: -(11.5 + Math.random()*3.2), r: 20, bomb, col: bomb ? '#3a3a3a' : `hsl(${Math.floor(Math.random()*360)},85%,60%)` });
+  }
+  function distSeg(px, py, ax, ay, bx, by){
+    const dx = bx-ax, dy = by-ay, l2 = dx*dx + dy*dy;
+    let t = l2 ? ((px-ax)*dx + (py-ay)*dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
+    const cx = ax + t*dx, cy = ay + t*dy; return Math.hypot(px-cx, py-cy);
+  }
+  function sliceSeg(ax, ay, bx, by){
+    for(let i = objs.length-1; i >= 0; i--){
+      const o = objs[i];
+      if(distSeg(o.x, o.y, ax, ay, bx, by) < o.r + 4){
+        if(o.bomb){ objs.splice(i,1); over(true); return; }
+        for(let k=0;k<10;k++) parts.push({ x:o.x, y:o.y, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6-2, life:24, col:o.col });
+        objs.splice(i,1); score++;
+        statusEl.textContent = 'Sliced: ' + score + ' — Lives: ' + (3 - misses);
+      }
+    }
+  }
+  function frame(t){
+    if(!running) return;
+    const dt = t - lastT; lastT = t;
+    spawnAcc += dt;
+    const interval = Math.max(480, 1100 - score*8);
+    if(spawnAcc >= interval){ spawnAcc = 0; spawn(); if(score > 18 && Math.random() < 0.5) spawn(); }
+    for(let i = objs.length-1; i >= 0; i--){
+      const o = objs[i]; o.x += o.vx; o.y += o.vy; o.vy += 0.22;
+      if(o.y > H + 46){ objs.splice(i,1); if(!o.bomb){ misses++; statusEl.textContent = 'Sliced: ' + score + ' — Lives: ' + (3 - misses); if(misses >= 3){ over(false); return; } } }
+    }
+    for(let i = parts.length-1; i >= 0; i--){ const p = parts[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.life--; if(p.life <= 0) parts.splice(i,1); }
+    for(let i = trail.length-1; i >= 0; i--){ trail[i].life--; if(trail[i].life <= 0) trail.splice(i,1); }
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(const p of parts){ ctx.globalAlpha = Math.max(0, p.life/24); ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    for(const o of objs){
+      ctx.fillStyle = o.col; ctx.shadowColor = o.col; ctx.shadowBlur = o.bomb ? 4 : 14;
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+      if(o.bomb){ ctx.fillStyle = '#fff'; ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.fillText('💣', o.x, o.y+6); }
+    }
+    if(trail.length > 1){
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath();
+      ctx.moveTo(trail[0].x, trail[0].y); for(let i=1;i<trail.length;i++) ctx.lineTo(trail[i].x, trail[i].y); ctx.stroke();
+    }
+  }
+  function pos(e){ const r = canvas.getBoundingClientRect(); const cx = (e.touches ? e.touches[0].clientX : e.clientX); const cy = (e.touches ? e.touches[0].clientY : e.clientY); return { x:(cx-r.left)*(W/r.width), y:(cy-r.top)*(H/r.height) }; }
+  function onMove(e){ if(!running) return; if(e.buttons === 0 && !e.touches) { prev = null; return; } e.preventDefault(); const p = pos(e); if(prev) sliceSeg(prev.x, prev.y, p.x, p.y); trail.push({ x:p.x, y:p.y, life:8 }); if(trail.length > 12) trail.shift(); prev = p; }
+  function onUp(){ prev = null; }
+  function over(bomb){
+    running = false; cancelAnimationFrame(raf);
+    const coins = Math.min(45, Math.floor(score/2));
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = bomb ? 'Boom! You sliced a bomb at ' + score + '.' : 'Out of lives at ' + score + '.';
+    document.getElementById('nsEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('slice', score);
+    wireScoreEntry('slice', score, 'nsLB', reset);
+  }
+  canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointerleave', onUp);
+  reset();
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointerleave', onUp); };
+}
+
+/* ---------- Tile Tap (rhythm tiles) ---------- */
+function openTileTap(){
+  const W = 320, H = 460, COLS = 4, cw = W / COLS, TH = 115;
+  openModal(`
+    <h3>&#127929; Tile Tap</h3>
+    <p class="ttt-status" id="ttStatus">Tap the lowest glowing tile's column. Tap a wrong column or let one fall past and it's over.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="ttCanvas" width="${W}" height="${H}" style="max-width:100%; background:#0b0912; border:1px solid var(--panel-edge); border-radius:10px; touch-action:none; cursor:pointer;"></canvas>
+    </div>
+    <div id="ttEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — most tiles wins</h4>
+    <div id="ttLB" class="lb-live" data-game="tiles" data-unit="pts">${leaderboardHTML('tiles','pts')}</div>
+  `);
+  const canvas = document.getElementById('ttCanvas'), ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('ttStatus');
+  let tiles, running, raf, score, speed, lastT, lastCol;
+
+  function reset(){
+    tiles = []; running = true; score = 0; speed = 2.4; lastT = performance.now(); lastCol = -1;
+    for(let i = 0; i < 5; i++) addTile(-i * TH + (H - TH));
+    document.getElementById('ttEnd').innerHTML = ''; statusEl.textContent = 'Tap the glowing tile!';
+    raf = requestAnimationFrame(frame);
+  }
+  function addTile(y){
+    let c; do { c = Math.floor(Math.random()*COLS); } while(c === lastCol); lastCol = c;
+    tiles.push({ col:c, y, tapped:false });
+  }
+  function frame(t){
+    if(!running) return;
+    const dt = t - lastT; lastT = t;
+    const dy = speed * (dt / 16.67);
+    for(const tl of tiles) tl.y += dy;
+    // remove off-screen tapped tiles, keep stream full
+    for(let i = tiles.length-1; i >= 0; i--){
+      const tl = tiles[i];
+      if(tl.tapped && tl.y > H){ tiles.splice(i,1); continue; }
+      if(!tl.tapped && tl.y > H){ over('A tile slipped past!'); return; }
+    }
+    let minY = Math.min(...tiles.map(t => t.y));
+    while(tiles.length < 6 || minY > 0){ addTile(minY - TH); minY -= TH; }
+    speed = 2.4 + score * 0.09;
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(let c = 1; c < COLS; c++){ ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(c*cw, 0); ctx.lineTo(c*cw, H); ctx.stroke(); }
+    const active = activeTile();
+    for(const tl of tiles){
+      const x = tl.col * cw;
+      if(tl.tapped){ ctx.fillStyle = 'rgba(77,238,234,0.18)'; }
+      else if(tl === active){ ctx.fillStyle = '#4deeea'; ctx.shadowColor = '#4deeea'; ctx.shadowBlur = 16; }
+      else { ctx.fillStyle = '#20232e'; }
+      ctx.fillRect(x+3, tl.y+3, cw-6, TH-6); ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = 'rgba(245,240,255,0.9)'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'left'; ctx.fillText(String(score), 10, 22);
+  }
+  function activeTile(){
+    let best = null;
+    for(const tl of tiles){ if(!tl.tapped && (!best || tl.y > best.y)) best = tl; }
+    return best;
+  }
+  function tap(e){
+    if(!running) return; e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+    const col = Math.floor(((cx - r.left) * (W / r.width)) / cw);
+    const active = activeTile();
+    if(active && active.col === col){ active.tapped = true; score++; }
+    else { over('Wrong column!'); }
+  }
+  function over(msg){
+    running = false; cancelAnimationFrame(raf);
+    const coins = Math.min(45, Math.floor(score/2));
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = msg + ' Score: ' + score;
+    document.getElementById('ttEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('tiles', score);
+    wireScoreEntry('tiles', score, 'ttLB', reset);
+  }
+  canvas.addEventListener('pointerdown', tap);
+  reset();
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); canvas.removeEventListener('pointerdown', tap); };
+}
+
+/* ---------- Road Cross (frogger-style, locked) ---------- */
+function openRoadCross(){
+  const W = 462, H = 462, CELL = 42, COLS = 11, ROWS = 11;
+  openModal(`
+    <h3>&#128020; Road Cross</h3>
+    <p class="ttt-status" id="rcStatus">Cross to the top without getting hit. Arrow keys / WASD or tap. 3 lives.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="rcCanvas" width="${W}" height="${H}" style="max-width:100%; background:#0c1410; border:1px solid var(--panel-edge); border-radius:10px; touch-action:none; cursor:pointer;"></canvas>
+    </div>
+    <div id="rcEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — most crossings wins</h4>
+    <div id="rcLB" class="lb-live" data-game="roadcross" data-unit="pts">${leaderboardHTML('roadcross','pts')}</div>
+  `);
+  const canvas = document.getElementById('rcCanvas'), ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('rcStatus');
+  const carCols = ['#ff4d94','#ffcc33','#4deeea','#5cffb1','#a78bfa','#fb7185'];
+  let lanes, player, running, raf, score, lives, lastT;
+
+  function yForRow(row){ return H - (row + 1) * CELL; }
+  function buildLanes(){
+    lanes = [];
+    for(let r = 0; r < ROWS; r++){
+      if(r === 0 || r === ROWS-1){ lanes.push(null); continue; }
+      const dir = r % 2 === 0 ? 1 : -1;
+      const speed = (0.7 + Math.random()*1.1 + score*0.05) * dir;
+      const cars = []; const n = 1 + Math.floor(Math.random()*2);
+      const carLen = CELL * (1.3 + Math.random());
+      for(let i = 0; i < n; i++) cars.push({ x: Math.random()*W, len: carLen, col: carCols[Math.floor(Math.random()*carCols.length)] });
+      lanes.push({ speed, cars });
+    }
+  }
+  function reset(full){
+    cancelAnimationFrame(raf);
+    if(full){ score = 0; lives = 3; }
+    buildLanes();
+    player = { col: Math.floor(COLS/2), row: 0 };
+    running = true; lastT = performance.now();
+    document.getElementById('rcEnd').innerHTML = '';
+    statusEl.textContent = 'Cross up! Lives: ' + lives + ' — Crossings: ' + score;
+    raf = requestAnimationFrame(frame);
+  }
+  function frame(t){
+    if(!running) return;
+    const dt = (t - lastT) / 16.67; lastT = t;
+    for(const lane of lanes){ if(!lane) continue; for(const c of lane.cars){ c.x += lane.speed * dt; if(lane.speed > 0 && c.x > W + c.len) c.x = -c.len; if(lane.speed < 0 && c.x < -c.len) c.x = W + c.len; } }
+    const lane = lanes[player.row];
+    if(lane){
+      const py = yForRow(player.row), px = player.col * CELL;
+      for(const c of lane.cars){ if(px + CELL - 6 > c.x + 4 && px + 6 < c.x + c.len - 4){ hit(); return; } void py; }
+    }
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(let r = 0; r < ROWS; r++){
+      const y = yForRow(r);
+      ctx.fillStyle = (r === 0 || r === ROWS-1) ? '#16351f' : (r % 2 === 0 ? '#14161d' : '#191c25');
+      ctx.fillRect(0, y, W, CELL);
+      if(lanes[r]){ ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.setLineDash([10,10]); ctx.beginPath(); ctx.moveTo(0, y + CELL/2); ctx.lineTo(W, y + CELL/2); ctx.stroke(); ctx.setLineDash([]); }
+    }
+    ctx.fillStyle = '#ffd23f'; ctx.font = '12px monospace'; ctx.textAlign = 'center'; ctx.fillText('▲ GOAL ▲', W/2, yForRow(ROWS-1) + CELL/2 + 4);
+    for(let r = 0; r < ROWS; r++){ const lane = lanes[r]; if(!lane) continue; const y = yForRow(r); for(const c of lane.cars){ ctx.fillStyle = c.col; ctx.shadowColor = c.col; ctx.shadowBlur = 8; roundRect(c.x, y + 7, c.len, CELL - 14, 6); ctx.fill(); ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(255,255,255,0.35)'; roundRect(c.x + 6, y + 11, c.len*0.3, CELL - 22, 3); ctx.fill(); } }
+    const px = player.col * CELL, py = yForRow(player.row);
+    ctx.fillStyle = '#f5f0ff'; ctx.shadowColor = '#4deeea'; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(px + CELL/2, py + CELL/2, CELL/2 - 8, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#1b1b1b'; ctx.beginPath(); ctx.arc(px + CELL/2 - 4, py + CELL/2 - 3, 2, 0, Math.PI*2); ctx.arc(px + CELL/2 + 4, py + CELL/2 - 3, 2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ff8c00'; ctx.beginPath(); ctx.moveTo(px + CELL/2, py + CELL/2 + 2); ctx.lineTo(px + CELL/2 - 3, py + CELL/2 + 6); ctx.lineTo(px + CELL/2 + 3, py + CELL/2 + 6); ctx.fill();
+  }
+  function roundRect(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function move(dc, dr){
+    if(!running) return;
+    player.col = Math.max(0, Math.min(COLS-1, player.col + dc));
+    player.row = Math.max(0, Math.min(ROWS-1, player.row + dr));
+    if(player.row === ROWS-1){ score++; statusEl.textContent = 'Nice! Lives: ' + lives + ' — Crossings: ' + score; reset(false); }
+  }
+  function hit(){
+    lives--;
+    if(lives <= 0){ over(); return; }
+    statusEl.textContent = 'Splat! Lives: ' + lives + ' — Crossings: ' + score;
+    player = { col: Math.floor(COLS/2), row: 0 };
+  }
+  function over(){
+    running = false; cancelAnimationFrame(raf);
+    const coins = Math.min(45, score * 3);
+    if(coins > 0) awardCoins(coins);
+    statusEl.textContent = 'Game over — ' + score + ' crossings.';
+    document.getElementById('rcEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('roadcross', score);
+    wireScoreEntry('roadcross', score, 'rcLB', () => reset(true));
+  }
+  function onKey(e){
+    const k = e.key;
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(k)) e.preventDefault();
+    if(k === 'ArrowLeft' || k === 'a' || k === 'A') move(-1, 0);
+    else if(k === 'ArrowRight' || k === 'd' || k === 'D') move(1, 0);
+    else if(k === 'ArrowUp' || k === 'w' || k === 'W') move(0, 1);
+    else if(k === 'ArrowDown' || k === 's' || k === 'S') move(0, -1);
+  }
+  function onTap(e){
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+    const px = (player.col + 0.5) * CELL * (r.width / W), py = (yForRow(player.row) + CELL/2) * (r.height / H);
+    if(Math.abs(cx - px) > Math.abs(cy - py)) move(cx > px ? 1 : -1, 0);
+    else move(0, cy < py ? 1 : -1);
+  }
+  document.addEventListener('keydown', onKey);
+  canvas.addEventListener('pointerdown', onTap);
+  reset(true);
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKey); canvas.removeEventListener('pointerdown', onTap); };
+}
+
 /* ---------- Spin The Wheel (tiered) ---------- */
 
 const WHEEL_TIERS = {
@@ -4407,33 +4710,60 @@ function openWheel(tierId){
 const AV_SKINS = ['#f1c27d', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#b0f2b4', '#a6c8ff', '#d8b4fe'];
 const AV_SHIRTS = ['#4deeea', '#ff4d94', '#ffcc33', '#5cffb1', '#a78bfa', '#fb7185', '#38bdf8', '#f97316'];
 const AV_PANTS = ['#2b3563', '#1f2937', '#3f3f46', '#4c1d95', '#134e4a', '#7c2d12'];
-const AV_HATS = ['none', 'cap', 'crown', 'tophat', 'halo', 'beanie', 'horns', 'headphones'];
-const AV_FACES = ['smile', 'cool', 'happy', 'wink', 'star'];
+const AV_HATS = ['none', 'cap', 'crown', 'tophat', 'halo', 'beanie', 'horns', 'headphones', 'wizard', 'bow'];
+const AV_FACES = ['smile', 'cool', 'happy', 'wink', 'star', 'angry'];
+
+let __avUID = 0;
+function shadeHex(hex, amt){
+  const n = parseInt(String(hex).slice(1), 16);
+  if(Number.isNaN(n)) return hex;
+  const r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
+  const b = Math.max(0, Math.min(255, (n & 255) + amt));
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
 
 function avatarSVG(av, size){
   const s = size || 64;
+  const uid = 'av' + (++__avUID);
   const hc = av.hatColor || '#ff4d94';
+  const skinD = shadeHex(av.skin, -34), shirtD = shadeHex(av.shirt, -40), pantsD = shadeHex(av.pants, -26);
+  const defs = `<defs>
+    <linearGradient id="${uid}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shadeHex(av.skin,18)}"/><stop offset="1" stop-color="${skinD}"/></linearGradient>
+    <linearGradient id="${uid}t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shadeHex(av.shirt,20)}"/><stop offset="1" stop-color="${shirtD}"/></linearGradient>
+    <linearGradient id="${uid}p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shadeHex(av.pants,16)}"/><stop offset="1" stop-color="${pantsD}"/></linearGradient>
+  </defs>`;
   let hat = '';
-  if(av.hat === 'cap') hat = `<rect x="11" y="4" width="18" height="6" rx="3" fill="${hc}"/><rect x="20" y="5" width="12" height="4" rx="2" fill="${hc}"/>`;
-  else if(av.hat === 'crown') hat = `<path d="M12 8 L12 2 L16 6 L20 1 L24 6 L28 2 L28 8 Z" fill="#ffd23f" stroke="#b8860b" stroke-width="0.6"/>`;
-  else if(av.hat === 'tophat') hat = `<rect x="9" y="7" width="22" height="3" rx="1" fill="#1b1b1b"/><rect x="13" y="0" width="14" height="8" fill="#1b1b1b"/><rect x="13" y="5" width="14" height="2" fill="${hc}"/>`;
-  else if(av.hat === 'halo') hat = `<ellipse cx="20" cy="3" rx="8" ry="2.4" fill="none" stroke="#ffe066" stroke-width="1.6"/>`;
-  else if(av.hat === 'beanie') hat = `<path d="M11 9 Q20 -1 29 9 Z" fill="${hc}"/><rect x="11" y="8" width="18" height="3" rx="1.5" fill="#f5f0ff"/>`;
-  else if(av.hat === 'horns') hat = `<path d="M12 8 Q8 2 11 1 Q13 4 15 7 Z" fill="#e5e7eb"/><path d="M28 8 Q32 2 29 1 Q27 4 25 7 Z" fill="#e5e7eb"/>`;
-  else if(av.hat === 'headphones') hat = `<path d="M11 12 Q11 3 20 3 Q29 3 29 12" fill="none" stroke="#1f2937" stroke-width="2"/><rect x="8.5" y="10" width="4" height="7" rx="2" fill="${hc}"/><rect x="27.5" y="10" width="4" height="7" rx="2" fill="${hc}"/>`;
-  let face = '';
-  if(av.face === 'smile') face = `<circle cx="16" cy="14" r="1.4" fill="#1b1b1b"/><circle cx="24" cy="14" r="1.4" fill="#1b1b1b"/><path d="M16 17 Q20 20 24 17" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
-  else if(av.face === 'cool') face = `<rect x="13" y="12" width="14" height="3.4" rx="1.4" fill="#1b1b1b"/><path d="M16 18 Q20 20 24 18" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
-  else if(av.face === 'happy') face = `<path d="M14.5 14 Q16 12 17.5 14" fill="none" stroke="#1b1b1b" stroke-width="1.2"/><path d="M22.5 14 Q24 12 25.5 14" fill="none" stroke="#1b1b1b" stroke-width="1.2"/><path d="M15 17 Q20 21 25 17" fill="none" stroke="#1b1b1b" stroke-width="1.3"/>`;
-  else if(av.face === 'wink') face = `<circle cx="16" cy="14" r="1.4" fill="#1b1b1b"/><path d="M22.5 14 L25.5 14" stroke="#1b1b1b" stroke-width="1.3"/><path d="M16 17 Q20 20 24 17" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
-  else if(av.face === 'star') face = `<text x="16" y="16" font-size="4" text-anchor="middle" fill="#ffd23f">★</text><text x="24" y="16" font-size="4" text-anchor="middle" fill="#ffd23f">★</text><path d="M16 18 Q20 21 24 18" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
-  return `<svg width="${s}" height="${s*1.2}" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg">
-    <rect x="6" y="21" width="5" height="13" rx="1.5" fill="${av.skin}"/>
-    <rect x="29" y="21" width="5" height="13" rx="1.5" fill="${av.skin}"/>
-    <rect x="11" y="21" width="18" height="14" rx="2" fill="${av.shirt}"/>
-    <rect x="13" y="35" width="6" height="11" rx="1.5" fill="${av.pants}"/>
-    <rect x="21" y="35" width="6" height="11" rx="1.5" fill="${av.pants}"/>
-    <rect x="12" y="6" width="16" height="14" rx="3" fill="${av.skin}"/>
+  if(av.hat === 'cap') hat = `<path d="M10 9 Q20 -1 30 9 Z" fill="${hc}"/><rect x="19" y="7" width="13" height="3.4" rx="1.7" fill="${shadeHex(hc,-30)}"/>`;
+  else if(av.hat === 'crown') hat = `<path d="M11 8 L11 1 L16 5.5 L20 0 L24 5.5 L29 1 L29 8 Z" fill="#ffd23f" stroke="#b8860b" stroke-width="0.7"/><circle cx="20" cy="3" r="1" fill="#ff4d94"/><circle cx="13" cy="4" r="0.8" fill="#4deeea"/><circle cx="27" cy="4" r="0.8" fill="#4deeea"/>`;
+  else if(av.hat === 'tophat') hat = `<rect x="8" y="7" width="24" height="3" rx="1.5" fill="#141414"/><rect x="12" y="-1" width="16" height="9" rx="1.5" fill="#1b1b1b"/><rect x="12" y="4" width="16" height="2.4" fill="${hc}"/>`;
+  else if(av.hat === 'halo') hat = `<ellipse cx="20" cy="2.5" rx="8.5" ry="2.6" fill="none" stroke="#ffe066" stroke-width="1.8" opacity="0.95"/>`;
+  else if(av.hat === 'beanie') hat = `<path d="M10 9 Q20 -2 30 9 Z" fill="${hc}"/><rect x="10" y="8" width="20" height="3.4" rx="1.7" fill="${shadeHex(hc,30)}"/><circle cx="20" cy="0.5" r="2" fill="${shadeHex(hc,30)}"/>`;
+  else if(av.hat === 'horns') hat = `<path d="M13 7 Q8 1 11 -1 Q14 3 16 6 Z" fill="#eef2f7"/><path d="M27 7 Q32 1 29 -1 Q26 3 24 6 Z" fill="#eef2f7"/>`;
+  else if(av.hat === 'headphones') hat = `<path d="M10 13 Q10 2 20 2 Q30 2 30 13" fill="none" stroke="#1f2937" stroke-width="2.4"/><rect x="7.5" y="10" width="4.5" height="8" rx="2.2" fill="${hc}"/><rect x="28" y="10" width="4.5" height="8" rx="2.2" fill="${hc}"/>`;
+  else if(av.hat === 'wizard') hat = `<path d="M20 -4 L12 9 L28 9 Z" fill="${hc}"/><rect x="11" y="8" width="18" height="2.6" rx="1.3" fill="${shadeHex(hc,-30)}"/><circle cx="20" cy="1" r="1" fill="#ffe066"/><circle cx="17" cy="5" r="0.8" fill="#ffe066"/>`;
+  else if(av.hat === 'bow') hat = `<path d="M16 5 L20 8 L16 11 Z" fill="${hc}"/><path d="M24 5 L20 8 L24 11 Z" fill="${hc}"/><circle cx="20" cy="8" r="1.6" fill="${shadeHex(hc,-30)}"/>`;
+  const cheeks = `<circle cx="14.5" cy="16" r="1.5" fill="#ff8fab" opacity="0.5"/><circle cx="25.5" cy="16" r="1.5" fill="#ff8fab" opacity="0.5"/>`;
+  let face = cheeks;
+  if(av.face === 'smile') face += `<circle cx="16" cy="13.5" r="1.5" fill="#1b1b1b"/><circle cx="24" cy="13.5" r="1.5" fill="#1b1b1b"/><path d="M15.5 17 Q20 20.5 24.5 17" fill="none" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/>`;
+  else if(av.face === 'cool') face += `<rect x="12.5" y="11.5" width="15" height="4" rx="2" fill="#12121a"/><rect x="13.5" y="12.2" width="5" height="1.4" rx="0.7" fill="#4deeea" opacity="0.7"/><path d="M16 18 Q20 20.5 24 18" fill="none" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/>`;
+  else if(av.face === 'happy') face += `<path d="M14 14 Q16 11.5 18 14" fill="none" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/><path d="M22 14 Q24 11.5 26 14" fill="none" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/><path d="M15 17 Q20 21.5 25 17" fill="none" stroke="#1b1b1b" stroke-width="1.4" stroke-linecap="round"/>`;
+  else if(av.face === 'wink') face += `<circle cx="16" cy="13.5" r="1.5" fill="#1b1b1b"/><path d="M22 14 Q24 12.5 26 14" fill="none" stroke="#1b1b1b" stroke-width="1.4" stroke-linecap="round"/><path d="M15.5 17 Q20 20.5 24.5 17" fill="none" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/>`;
+  else if(av.face === 'star') face += `<text x="16" y="15.5" font-size="4.4" text-anchor="middle" fill="#ffd23f">★</text><text x="24" y="15.5" font-size="4.4" text-anchor="middle" fill="#ffd23f">★</text><path d="M15 17.5 Q20 21.5 25 17.5" fill="none" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/>`;
+  else if(av.face === 'angry') face += `<path d="M14 12 L18 13.5" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/><path d="M26 12 L22 13.5" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/><circle cx="16" cy="14.5" r="1.4" fill="#1b1b1b"/><circle cx="24" cy="14.5" r="1.4" fill="#1b1b1b"/><path d="M16 19 Q20 16.5 24 19" fill="none" stroke="#1b1b1b" stroke-width="1.3" stroke-linecap="round"/>`;
+  return `<svg width="${s}" height="${s*1.28}" viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
+    ${defs}
+    <ellipse cx="20" cy="50" rx="12" ry="2" fill="#000" opacity="0.22"/>
+    <rect x="6" y="21" width="5.4" height="13" rx="2.5" fill="url(#${uid}s)"/>
+    <rect x="28.6" y="21" width="5.4" height="13" rx="2.5" fill="url(#${uid}s)"/>
+    <circle cx="8.7" cy="34" r="2.4" fill="${av.skin}"/><circle cx="31.3" cy="34" r="2.4" fill="${av.skin}"/>
+    <rect x="10.5" y="20.5" width="19" height="16" rx="3.5" fill="url(#${uid}t)"/>
+    <rect x="14.5" y="20.5" width="11" height="3.6" rx="1.8" fill="${shadeHex(av.shirt,26)}" opacity="0.6"/>
+    <rect x="12.5" y="36" width="6.6" height="12" rx="2.5" fill="url(#${uid}p)"/>
+    <rect x="20.9" y="36" width="6.6" height="12" rx="2.5" fill="url(#${uid}p)"/>
+    <rect x="11.6" y="47" width="8" height="4" rx="2" fill="#20242e"/>
+    <rect x="20.4" y="47" width="8" height="4" rx="2" fill="#20242e"/>
+    <rect x="10.5" y="4.5" width="19" height="16" rx="5" fill="url(#${uid}s)" stroke="${skinD}" stroke-width="0.5"/>
     ${face}
     ${hat}
   </svg>`;
@@ -4464,9 +4794,9 @@ function openAvatar(){
         <div><div class="form-note">Skin</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_SKINS,'skin')}</div></div>
         <div><div class="form-note">Shirt</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_SHIRTS,'shirt')}</div></div>
         <div><div class="form-note">Pants</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_PANTS,'pants')}</div></div>
-        <div><div class="form-note">Hat</div><div style="display:flex; gap:6px; flex-wrap:wrap;" id="avHats">${optRow(AV_HATS,'hat',['None','Cap','Crown','Top Hat','Halo','Beanie','Horns','Phones'])}</div></div>
+        <div><div class="form-note">Hat</div><div style="display:flex; gap:6px; flex-wrap:wrap;" id="avHats">${optRow(AV_HATS,'hat',['None','Cap','Crown','Top Hat','Halo','Beanie','Horns','Phones','Wizard','Bow'])}</div></div>
         <div><div class="form-note">Hat color</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_SHIRTS,'hatColor')}</div></div>
-        <div><div class="form-note">Face</div><div style="display:flex; gap:6px; flex-wrap:wrap;" id="avFaces">${optRow(AV_FACES,'face',['Smile','Cool','Happy','Wink','Star'])}</div></div>
+        <div><div class="form-note">Face</div><div style="display:flex; gap:6px; flex-wrap:wrap;" id="avFaces">${optRow(AV_FACES,'face',['Smile','Cool','Happy','Wink','Star','Angry'])}</div></div>
       </div>
     </div>
     <p class="form-note" style="text-align:center; margin-top:14px;">Your avatar and name save automatically and show on your Spin/score panels.</p>
