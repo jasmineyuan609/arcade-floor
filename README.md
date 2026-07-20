@@ -16,7 +16,8 @@ A neon, player-built arcade you host yourself. Play a floor full of mini-games, 
 - **Shared, live leaderboards** — every score is stored server-side and pushed to all connected players instantly.
 - **Shared cabinets** — cabinets players install (paste HTML or link out) appear for everyone on the floor in real time.
 - **Live presence** — an online-player counter in the header updates as people come and go.
-- **Coins, prize wheel, and themes** — per-player progress saved locally in the browser.
+- **Customizable avatars** — build a blocky character (skin, shirt, pants, hat, face) + display name; saved locally and shown on your Spin/score panels.
+- **Coins, prize wheels, and themes** — three wheel tiers (Spin / Mega / Diamond) with rising cost and far better theme/game odds; per-player progress saved locally in the browser.
 - **The Oracle** — answer a few questions and get matched to a cabinet.
 
 ## Get a permanent link (deploy for free)

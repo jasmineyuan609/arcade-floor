@@ -59,7 +59,11 @@ const QUESTIONS = [
 ];
 
 const state = { submittedGames: [], leaderboards: {} };
-const player = { coins: 0, unlockedGames: [], unlockedThemes: ['classic'], theme: 'classic', fwProgress: 0 };
+const player = {
+  coins: 0, unlockedGames: [], unlockedThemes: ['classic'], theme: 'classic', fwProgress: 0,
+  name: '',
+  avatar: { skin: '#f1c27d', shirt: '#4deeea', pants: '#2b3563', hat: 'none', hatColor: '#ff4d94', face: 'smile' },
+};
 
 /* ================= UTIL ================= */
 
@@ -3475,7 +3479,7 @@ function scoreEntryHTML(gameId, score){
   const record = isNewRecord(gameId, score, false);
   return (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + `
     <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:6px;">
-      <input id="seName" placeholder="Your name" maxlength="16" />
+      <input id="seName" placeholder="Your name" maxlength="16" value="${escapeHTML(player.name || '')}" />
       <button class="btn btn-small btn-primary" id="seSave">Save Score</button>
       <button class="btn btn-small btn-ghost" id="seAgain">Play Again</button>
     </div>`;
@@ -4205,31 +4209,62 @@ function openDisasterDash(){
   activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); };
 }
 
-/* ---------- Spin The Wheel ---------- */
+/* ---------- Spin The Wheel (tiered) ---------- */
 
-const WHEEL_COST = 20;
-const WHEEL_SEGMENTS = [
-  { type:'coins', value:10, label:'+10' },
-  { type:'coins', value:25, label:'+25' },
-  { type:'nothing', label:'BUST' },
-  { type:'coins', value:50, label:'+50' },
-  { type:'game', label:'GAME' },
-  { type:'nothing', label:'BUST' },
-  { type:'theme', label:'THEME' },
-  { type:'coins', value:15, label:'+15' },
-];
+const WHEEL_TIERS = {
+  standard: {
+    id:'standard', name:'Spin The Wheel', emoji:'🎡', cost:20,
+    segments:[
+      { type:'coins', value:10, label:'+10' },
+      { type:'coins', value:25, label:'+25' },
+      { type:'nothing', label:'BUST' },
+      { type:'coins', value:50, label:'+50' },
+      { type:'game', label:'GAME' },
+      { type:'nothing', label:'BUST' },
+      { type:'theme', label:'THEME' },
+      { type:'coins', value:15, label:'+15' },
+    ],
+  },
+  mega: {
+    id:'mega', name:'Mega Wheel', emoji:'🎰', cost:60,
+    segments:[
+      { type:'game', label:'GAME' },
+      { type:'theme', label:'THEME' },
+      { type:'coins', value:50, label:'+50' },
+      { type:'game', label:'GAME' },
+      { type:'theme', label:'THEME' },
+      { type:'coins', value:100, label:'+100' },
+      { type:'coins', value:150, label:'JACKPOT' },
+      { type:'nothing', label:'BUST' },
+    ],
+  },
+  diamond: {
+    id:'diamond', name:'Diamond Wheel', emoji:'💎', cost:150,
+    segments:[
+      { type:'game', label:'GAME' },
+      { type:'theme', label:'THEME' },
+      { type:'game', label:'GAME' },
+      { type:'theme', label:'THEME' },
+      { type:'game', label:'GAME' },
+      { type:'theme', label:'THEME' },
+      { type:'coins', value:200, label:'+200' },
+      { type:'coins', value:500, label:'JACKPOT' },
+    ],
+  },
+};
 
 function cssVar(name){
   return getComputedStyle(document.body).getPropertyValue(name).trim() || '#4deeea';
 }
 
-function drawWheel(canvas){
+function drawWheel(canvas, segments){
   const ctx = canvas.getContext('2d');
   const cx = 120, cy = 120, r = 108;
-  const segAngle = (Math.PI*2) / WHEEL_SEGMENTS.length;
+  const segAngle = (Math.PI*2) / segments.length;
   const palette = [cssVar('--cyan'), cssVar('--pink'), cssVar('--yellow'), cssVar('--green')];
+  const typeColor = { game:'#a855f7', theme:'#22d3ee' };
   ctx.clearRect(0,0,240,240);
-  WHEEL_SEGMENTS.forEach((seg,i) => {
+  segments.forEach((seg,i) => {
     const start = i*segAngle - Math.PI/2;
     const end = start + segAngle;
     ctx.beginPath();
@@ -4237,7 +4272,7 @@ function drawWheel(canvas){
     ctx.arc(cx,cy,r,start,end);
     ctx.closePath();
     ctx.globalAlpha = seg.type === 'nothing' ? 0.3 : 0.92;
-    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillStyle = typeColor[seg.type] || palette[i % palette.length];
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = '#12091f';
@@ -4248,8 +4283,8 @@ function drawWheel(canvas){
     ctx.rotate(start + segAngle/2);
     ctx.textAlign = 'right';
     ctx.fillStyle = '#12091f';
-    ctx.font = 'bold 12px "JetBrains Mono", monospace';
-    ctx.fillText(seg.label, r-16, 4);
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    ctx.fillText(seg.label, r-14, 4);
     ctx.restore();
   });
   ctx.beginPath();
@@ -4261,50 +4296,71 @@ function drawWheel(canvas){
   ctx.stroke();
 }
 
-function openWheel(){
+function openWheel(tierId){
+  let tier = WHEEL_TIERS[tierId] || WHEEL_TIERS.standard;
+  const tierButtons = Object.values(WHEEL_TIERS).map(t =>
+    `<button class="btn btn-small ${t.id===tier.id?'btn-primary':'btn-ghost'}" data-tier="${t.id}">${t.emoji} ${t.name} — ${t.cost} &#129689;</button>`
+  ).join(' ');
   openModal(`
-    <h3>&#127920; Spin The Wheel</h3>
+    <h3>${tier.emoji} <span id="wheelTitle">${tier.name}</span></h3>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:10px;">${tierButtons}</div>
+    <p class="form-note" style="text-align:center; margin:-2px 0 10px;">Pricier wheels have far better odds of themes &amp; games (Diamond has no busts).</p>
     <div class="wheel-wrap">
       <div class="wheel-pointer"></div>
       <canvas id="wheelCanvas" width="240" height="240"></canvas>
     </div>
-    <p class="wheel-cost">Costs ${WHEEL_COST} &#129689; per spin. You have <span id="wheelCoins">${player.coins}</span> &#129689;.</p>
-    <div style="text-align:center;"><button class="btn btn-primary btn-small" id="spinBtn">Spin (${WHEEL_COST} &#129689;)</button></div>
+    <p class="wheel-cost">Costs <span id="wheelCostLbl">${tier.cost}</span> &#129689; per spin. You have <span id="wheelCoins">${player.coins}</span> &#129689;.</p>
+    <div style="text-align:center;"><button class="btn btn-primary btn-small" id="spinBtn">Spin (<span id="spinCostLbl">${tier.cost}</span> &#129689;)</button></div>
     <p class="wheel-result" id="wheelResult"></p>
   `);
 
   const canvas = document.getElementById('wheelCanvas');
-  drawWheel(canvas);
   let spinning = false;
   let currentRotation = 0;
+  drawWheel(canvas, tier.segments);
+
+  document.querySelectorAll('[data-tier]').forEach(b => b.addEventListener('click', () => {
+    if(spinning) return;
+    tier = WHEEL_TIERS[b.dataset.tier];
+    document.querySelectorAll('[data-tier]').forEach(x => { x.classList.toggle('btn-primary', x===b); x.classList.toggle('btn-ghost', x!==b); });
+    document.getElementById('wheelTitle').textContent = tier.name;
+    document.getElementById('wheelCostLbl').textContent = tier.cost;
+    document.getElementById('spinCostLbl').textContent = tier.cost;
+    document.getElementById('wheelResult').textContent = '';
+    currentRotation = 0; canvas.style.transition = 'none'; canvas.style.transform = 'rotate(0deg)';
+    // force reflow so the next transition applies cleanly
+    void canvas.offsetWidth;
+    canvas.style.transition = '';
+    drawWheel(canvas, tier.segments);
+  }));
 
   document.getElementById('spinBtn').addEventListener('click', async () => {
     if(spinning) return;
-    if(player.coins < WHEEL_COST){
+    if(player.coins < tier.cost){
       document.getElementById('wheelResult').textContent = "Not enough coins — play a cabinet to earn more.";
       return;
     }
     spinning = true;
     document.getElementById('spinBtn').disabled = true;
     document.getElementById('wheelResult').textContent = '';
-    player.coins -= WHEEL_COST;
+    player.coins -= tier.cost;
     renderCoinBadge();
     document.getElementById('wheelCoins').textContent = player.coins;
     await persistPlayerState();
 
-    const segAngle = 360 / WHEEL_SEGMENTS.length;
-    const targetIndex = Math.floor(Math.random()*WHEEL_SEGMENTS.length);
+    const segs = tier.segments;
+    const segAngle = 360 / segs.length;
+    const targetIndex = Math.floor(Math.random()*segs.length);
     const buffer = segAngle*0.18;
     const targetAngle = targetIndex*segAngle + buffer + Math.random()*(segAngle-2*buffer);
     const fullSpins = 6 + Math.floor(Math.random()*3);
     currentRotation += fullSpins*360 + ((360-targetAngle) - (currentRotation % 360) + 360) % 360;
     canvas.style.transform = `rotate(${currentRotation}deg)`;
 
-    setTimeout(() => resolveSpin(targetIndex), 4150);
+    setTimeout(() => resolveSpin(segs[targetIndex]), 4150);
   });
 
-  async function resolveSpin(i){
-    const seg = WHEEL_SEGMENTS[i];
+  async function resolveSpin(seg){
     let resultText = '';
     if(seg.type === 'coins'){
       player.coins += seg.value;
@@ -4344,6 +4400,97 @@ function openWheel(){
     }
     spinning = false;
   }
+}
+
+/* ---------- Avatars ---------- */
+
+const AV_SKINS = ['#f1c27d', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#b0f2b4', '#a6c8ff', '#d8b4fe'];
+const AV_SHIRTS = ['#4deeea', '#ff4d94', '#ffcc33', '#5cffb1', '#a78bfa', '#fb7185', '#38bdf8', '#f97316'];
+const AV_PANTS = ['#2b3563', '#1f2937', '#3f3f46', '#4c1d95', '#134e4a', '#7c2d12'];
+const AV_HATS = ['none', 'cap', 'crown', 'tophat', 'halo', 'beanie', 'horns', 'headphones'];
+const AV_FACES = ['smile', 'cool', 'happy', 'wink', 'star'];
+
+function avatarSVG(av, size){
+  const s = size || 64;
+  const hc = av.hatColor || '#ff4d94';
+  let hat = '';
+  if(av.hat === 'cap') hat = `<rect x="11" y="4" width="18" height="6" rx="3" fill="${hc}"/><rect x="20" y="5" width="12" height="4" rx="2" fill="${hc}"/>`;
+  else if(av.hat === 'crown') hat = `<path d="M12 8 L12 2 L16 6 L20 1 L24 6 L28 2 L28 8 Z" fill="#ffd23f" stroke="#b8860b" stroke-width="0.6"/>`;
+  else if(av.hat === 'tophat') hat = `<rect x="9" y="7" width="22" height="3" rx="1" fill="#1b1b1b"/><rect x="13" y="0" width="14" height="8" fill="#1b1b1b"/><rect x="13" y="5" width="14" height="2" fill="${hc}"/>`;
+  else if(av.hat === 'halo') hat = `<ellipse cx="20" cy="3" rx="8" ry="2.4" fill="none" stroke="#ffe066" stroke-width="1.6"/>`;
+  else if(av.hat === 'beanie') hat = `<path d="M11 9 Q20 -1 29 9 Z" fill="${hc}"/><rect x="11" y="8" width="18" height="3" rx="1.5" fill="#f5f0ff"/>`;
+  else if(av.hat === 'horns') hat = `<path d="M12 8 Q8 2 11 1 Q13 4 15 7 Z" fill="#e5e7eb"/><path d="M28 8 Q32 2 29 1 Q27 4 25 7 Z" fill="#e5e7eb"/>`;
+  else if(av.hat === 'headphones') hat = `<path d="M11 12 Q11 3 20 3 Q29 3 29 12" fill="none" stroke="#1f2937" stroke-width="2"/><rect x="8.5" y="10" width="4" height="7" rx="2" fill="${hc}"/><rect x="27.5" y="10" width="4" height="7" rx="2" fill="${hc}"/>`;
+  let face = '';
+  if(av.face === 'smile') face = `<circle cx="16" cy="14" r="1.4" fill="#1b1b1b"/><circle cx="24" cy="14" r="1.4" fill="#1b1b1b"/><path d="M16 17 Q20 20 24 17" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
+  else if(av.face === 'cool') face = `<rect x="13" y="12" width="14" height="3.4" rx="1.4" fill="#1b1b1b"/><path d="M16 18 Q20 20 24 18" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
+  else if(av.face === 'happy') face = `<path d="M14.5 14 Q16 12 17.5 14" fill="none" stroke="#1b1b1b" stroke-width="1.2"/><path d="M22.5 14 Q24 12 25.5 14" fill="none" stroke="#1b1b1b" stroke-width="1.2"/><path d="M15 17 Q20 21 25 17" fill="none" stroke="#1b1b1b" stroke-width="1.3"/>`;
+  else if(av.face === 'wink') face = `<circle cx="16" cy="14" r="1.4" fill="#1b1b1b"/><path d="M22.5 14 L25.5 14" stroke="#1b1b1b" stroke-width="1.3"/><path d="M16 17 Q20 20 24 17" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
+  else if(av.face === 'star') face = `<text x="16" y="16" font-size="4" text-anchor="middle" fill="#ffd23f">★</text><text x="24" y="16" font-size="4" text-anchor="middle" fill="#ffd23f">★</text><path d="M16 18 Q20 21 24 18" fill="none" stroke="#1b1b1b" stroke-width="1.2"/>`;
+  return `<svg width="${s}" height="${s*1.2}" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="21" width="5" height="13" rx="1.5" fill="${av.skin}"/>
+    <rect x="29" y="21" width="5" height="13" rx="1.5" fill="${av.skin}"/>
+    <rect x="11" y="21" width="18" height="14" rx="2" fill="${av.shirt}"/>
+    <rect x="13" y="35" width="6" height="11" rx="1.5" fill="${av.pants}"/>
+    <rect x="21" y="35" width="6" height="11" rx="1.5" fill="${av.pants}"/>
+    <rect x="12" y="6" width="16" height="14" rx="3" fill="${av.skin}"/>
+    ${face}
+    ${hat}
+  </svg>`;
+}
+
+function renderAvatarBadge(){
+  const el = document.getElementById('avatarBadge');
+  if(el) el.innerHTML = avatarSVG(player.avatar, 22);
+}
+
+function openAvatar(){
+  const swatchRow = (arr, key) => arr.map(c =>
+    `<button class="av-swatch" data-key="${key}" data-val="${c}" style="width:30px;height:30px;border-radius:8px;border:2px solid ${player.avatar[key]===c?'#fff':'transparent'};background:${c};cursor:pointer;"></button>`
+  ).join('');
+  const optRow = (arr, key, labels) => arr.map((v, i) =>
+    `<button class="btn btn-small ${player.avatar[key]===v?'btn-primary':'btn-ghost'}" data-key="${key}" data-val="${v}">${labels ? labels[i] : v}</button>`
+  ).join(' ');
+  openModal(`
+    <h3>&#129485; Your Avatar</h3>
+    <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; justify-content:center;">
+      <div style="text-align:center;">
+        <div id="avPreview" style="background:radial-gradient(circle at 50% 30%,#1b2140,#0a0d1c); border:1px solid var(--panel-edge); border-radius:14px; padding:10px 24px;">${avatarSVG(player.avatar, 130)}</div>
+        <div style="margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:center;">
+          <input id="avName" placeholder="Display name" maxlength="16" value="${escapeHTML(player.name || '')}" />
+        </div>
+      </div>
+      <div style="flex:1; min-width:250px; display:flex; flex-direction:column; gap:12px;">
+        <div><div class="form-note">Skin</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_SKINS,'skin')}</div></div>
+        <div><div class="form-note">Shirt</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_SHIRTS,'shirt')}</div></div>
+        <div><div class="form-note">Pants</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_PANTS,'pants')}</div></div>
+        <div><div class="form-note">Hat</div><div style="display:flex; gap:6px; flex-wrap:wrap;" id="avHats">${optRow(AV_HATS,'hat',['None','Cap','Crown','Top Hat','Halo','Beanie','Horns','Phones'])}</div></div>
+        <div><div class="form-note">Hat color</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${swatchRow(AV_SHIRTS,'hatColor')}</div></div>
+        <div><div class="form-note">Face</div><div style="display:flex; gap:6px; flex-wrap:wrap;" id="avFaces">${optRow(AV_FACES,'face',['Smile','Cool','Happy','Wink','Star'])}</div></div>
+      </div>
+    </div>
+    <p class="form-note" style="text-align:center; margin-top:14px;">Your avatar and name save automatically and show on your Spin/score panels.</p>
+  `);
+  function refresh(){
+    document.getElementById('avPreview').innerHTML = avatarSVG(player.avatar, 130);
+    document.querySelectorAll('.av-swatch').forEach(b => {
+      b.style.borderColor = player.avatar[b.dataset.key] === b.dataset.val ? '#fff' : 'transparent';
+    });
+    ['avHats','avFaces'].forEach(id => {
+      document.querySelectorAll('#' + id + ' [data-key]').forEach(b => {
+        const on = player.avatar[b.dataset.key] === b.dataset.val;
+        b.classList.toggle('btn-primary', on); b.classList.toggle('btn-ghost', !on);
+      });
+    });
+  }
+  document.querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', async () => {
+    player.avatar[b.dataset.key] = b.dataset.val;
+    refresh(); renderAvatarBadge(); await persistPlayerState();
+  }));
+  document.getElementById('avName').addEventListener('input', async (e) => {
+    player.name = e.target.value.trim();
+    await persistPlayerState();
+  });
 }
 
 /* ---------- Themes ---------- */
@@ -4609,10 +4756,12 @@ async function init(){
   await loadData();
   applyTheme();
   renderCoinBadge();
+  renderAvatarBadge();
   renderGrid();
   renderOracle();
-  document.getElementById('wheelBtn').addEventListener('click', openWheel);
+  document.getElementById('wheelBtn').addEventListener('click', () => openWheel());
   document.getElementById('themesBtn').addEventListener('click', openThemes);
+  document.getElementById('avatarBtn').addEventListener('click', openAvatar);
 }
 
 init();
