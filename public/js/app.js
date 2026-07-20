@@ -22,7 +22,7 @@ const BUILTIN_GAMES = [
   { id:'racer', title:'Traffic Racer', creator:'The Floor', pitch:'Weave your car through endless traffic at increasing speed. One crash ends the run.', emoji:'🏎️', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'green', builtin:true },
   { id:'stacker', title:'Tower Stack', creator:'The Floor', pitch:'Time your taps to stack the sliding blocks into a towering skyscraper. Miss and the overhang gets sliced off.', emoji:'🏗️', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true },
   { id:'simon', title:'Neon Simon', creator:'The Floor', pitch:'Watch the pattern light up, then play it back. Each round adds one more — how long is your memory?', emoji:'🎵', pace:'slow', type:'puzzle', players:'solo', difficulty:'medium', accent:'pink', builtin:true },
-  { id:'color-rush', title:'Color Rush', creator:'The Floor', pitch:'A color flashes, four buttons appear — smash the right one before the clock runs out.', emoji:'🎨', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true, lockable:true },
+  { id:'color-rush', title:'Color Dash', creator:'The Floor', pitch:'Endless neon runner starring your avatar — jump the spikes solo or race a computer rival.', emoji:'🏃', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'yellow', builtin:true, lockable:true },
   { id:'mole-smash', title:'Mole Smash', creator:'The Floor', pitch:'Nine holes, one mole, nowhere near enough time. Tap it before it ducks.', emoji:'🐹', pace:'fast', type:'reflex', players:'solo', difficulty:'medium', accent:'cyan', builtin:true, lockable:true },
   { id:'skytower', title:'Sky Tower', creator:'The Floor', pitch:'Climb an endless tower of floating platforms without falling — a neon Tower-of-Hell obby. The higher you go, the trickier the jumps.', emoji:'🗼', pace:'fast', type:'reflex', players:'solo', difficulty:'hard', accent:'green', builtin:true },
   { id:'clicker', title:'Cash Clicker', creator:'The Floor', pitch:'Tap to earn cash, then buy upgrades and auto-earners to get rich while idle — a simulator-style grind. Your progress saves.', emoji:'💰', pace:'slow', type:'idle', players:'solo', difficulty:'easy', accent:'yellow', builtin:true },
@@ -1367,86 +1367,143 @@ function openCustomCodeGame(g){
   activeGameCleanup = () => { window.removeEventListener('message', onMessage); };
 }
 
-/* ---------- Color Rush ---------- */
-
-const RUSH_COLORS = [
-  { name:'Cyan', hex:'#4deeea' }, { name:'Pink', hex:'#ff4d94' },
-  { name:'Yellow', hex:'#ffcc33' }, { name:'Green', hex:'#5cffb1' },
-];
-
-function shuffle(arr){ return [...arr].sort(() => Math.random()-0.5); }
+/* ---------- Color Dash (endless runner: solo or vs AI) ---------- */
 
 function openColorRush(){
+  const W = 460, H = 210, GROUND = H - 26, PW = 22, PH = 28, GRAV = 0.74, JUMP = -12.2;
+  const OB_COLORS = ['#ff4d94', '#4deeea', '#ffcc33', '#5cffb1', '#a78bfa'];
   openModal(`
-    <h3>&#127912; Color Rush</h3>
-    <div class="blitz-timer" id="crTimer">20s left</div>
-    <p class="form-note" style="text-align:center;">Tap the button that matches:</p>
-    <div id="crTarget" style="width:56px; height:56px; border-radius:12px; margin:10px auto 18px auto; border:2px solid var(--panel-edge);"></div>
-    <div class="color-row" id="crButtons"></div>
-    <div class="blitz-score" id="crScore" style="text-align:center; margin-top:14px;">Score: 0</div>
-    <div style="text-align:center; margin-top:14px;"><button class="btn btn-small btn-primary" id="crStart">Start</button></div>
-    <div id="crResult"></div>
-    <h4>Top 10 — highest score wins</h4>
+    <h3>&#127939; Color Dash</h3>
+    <p class="ttt-status" id="crStatus">Endless neon runner — Space / &uarr; / tap to jump the obstacles. Pick a mode to begin.</p>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="crCanvas" width="${W}" height="${H}" style="max-width:100%; background:linear-gradient(180deg,#0b0a1e,#151235); border:1px solid var(--panel-edge); border-radius:10px; touch-action:none; cursor:pointer;"></canvas>
+    </div>
+    <div id="crModes" style="text-align:center; margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+      <button class="btn btn-small btn-primary" id="crSolo">&#127939; Solo run</button>
+      <button class="btn btn-small btn-ghost" id="crVs">&#129302; Race the AI</button>
+    </div>
+    <div id="crEnd" style="text-align:center; margin-top:12px;"></div>
+    <h4>Top 10 — longest run wins</h4>
     <div id="crLB" class="lb-live" data-game="color-rush" data-unit="pts">${leaderboardHTML('color-rush','pts')}</div>
   `);
+  const canvas = document.getElementById('crCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('crStatus');
+  const modesEl = document.getElementById('crModes');
+  let obstacles, you, ai, vsAI, running, raf, dist, speed, aiDist;
 
-  let score = 0, timeLeft = 20, timer = null, running = false, target = null;
-  const targetEl = document.getElementById('crTarget');
-  const buttonsEl = document.getElementById('crButtons');
-  const scoreEl = document.getElementById('crScore');
-  const timerEl = document.getElementById('crTimer');
-
-  document.getElementById('crStart').addEventListener('click', start);
-
-  function start(){
-    if(running) return;
-    running = true; score = 0; timeLeft = 20;
-    scoreEl.textContent = 'Score: 0';
-    document.getElementById('crStart').style.display = 'none';
-    nextRound();
-    timer = setInterval(() => {
-      timeLeft--;
-      timerEl.textContent = `${timeLeft}s left`;
-      if(timeLeft <= 0) finish();
-    }, 1000);
+  function mkRunner(x){ return { x, y: GROUND - PH, vy: 0, onGround: true, alive: true }; }
+  function jump(r){ if(r && r.alive && r.onGround){ r.vy = JUMP; r.onGround = false; } }
+  function stepRunner(r){
+    if(!r || !r.alive) return;
+    r.vy += GRAV; r.y += r.vy;
+    if(r.y >= GROUND - PH){ r.y = GROUND - PH; r.vy = 0; r.onGround = true; }
   }
-
-  function nextRound(){
-    target = RUSH_COLORS[Math.floor(Math.random()*RUSH_COLORS.length)];
-    targetEl.style.background = target.hex;
-    buttonsEl.innerHTML = shuffle(RUSH_COLORS).map(c =>
-      `<button type="button" class="swatch" data-name="${c.name}" style="--sw:${c.hex}"></button>`
-    ).join('');
-    buttonsEl.querySelectorAll('.swatch').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if(!running) return;
-        if(btn.dataset.name === target.name){ score++; scoreEl.textContent = `Score: ${score}`; }
-        nextRound();
-      });
+  function hits(r){
+    if(!r || !r.alive) return false;
+    for(const o of obstacles){
+      const ox = o.x, oy = GROUND - o.h;
+      if(r.x + PW - 4 > ox + 2 && r.x + 4 < ox + o.w - 2 && r.y + PH > oy + 2) return true;
+    }
+    return false;
+  }
+  function spawn(){
+    const h = 20 + Math.random() * 24;
+    const w = 16 + Math.random() * 14;
+    obstacles.push({ x: W + 20, w, h, col: OB_COLORS[Math.floor(Math.random() * OB_COLORS.length)] });
+  }
+  function start(vs){
+    vsAI = vs;
+    obstacles = []; dist = 0; speed = 4.4; aiDist = 0;
+    you = mkRunner(vs ? 108 : 100);
+    ai = vs ? mkRunner(72) : null;
+    running = true;
+    modesEl.style.display = 'none';
+    document.getElementById('crEnd').innerHTML = '';
+    statusEl.textContent = vs ? 'Race! Out-run the AI.' : 'Run! Jump the neon spikes.';
+    raf = requestAnimationFrame(frame);
+  }
+  function frame(){
+    if(!running) return;
+    speed += 0.0016;
+    for(const o of obstacles) o.x -= speed;
+    obstacles = obstacles.filter(o => o.x + o.w > -12);
+    const last = obstacles.length ? obstacles[obstacles.length - 1].x : -Infinity;
+    const gap = 150 + Math.random() * 120 + speed * 6;
+    if(last < W - gap) spawn();
+    stepRunner(you); stepRunner(ai);
+    if(ai && ai.alive){
+      let n = null;
+      for(const o of obstacles){ if(o.x + o.w > ai.x && (!n || o.x < n.x)) n = o; }
+      if(n){ const d = n.x - (ai.x + PW); if(d < 46 + Math.random() * 10 && d > -4 && ai.onGround && Math.random() > 0.06) jump(ai); }
+    }
+    dist += speed;
+    if(hits(you)){ you.alive = false; over(); return; }
+    if(ai && ai.alive && hits(ai)){ ai.alive = false; aiDist = Math.floor(dist / 10); statusEl.textContent = 'The AI crashed at ' + aiDist + ' — keep going!'; }
+    draw();
+    raf = requestAnimationFrame(frame);
+  }
+  function drawGround(){
+    ctx.strokeStyle = 'rgba(140,130,200,0.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, GROUND); ctx.lineTo(W, GROUND); ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,130,200,0.2)';
+    for(let i = 0; i < W + 40; i += 40){ const x = i - ((dist * 0.5) % 40); ctx.beginPath(); ctx.moveTo(x, GROUND + 7); ctx.lineTo(x + 18, GROUND + 7); ctx.stroke(); }
+  }
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    drawGround();
+    for(const o of obstacles){
+      const oy = GROUND - o.h;
+      ctx.fillStyle = o.col; ctx.shadowColor = o.col; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.moveTo(o.x, GROUND); ctx.lineTo(o.x + o.w / 2, oy); ctx.lineTo(o.x + o.w, GROUND); ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    if(ai){
+      ctx.globalAlpha = ai.alive ? 0.6 : 0.18;
+      drawAvatarChar(ctx, playerAvatar(), ai.x, ai.y, PW, PH, 1);
+      ctx.globalAlpha = 1;
+      if(ai.alive){ ctx.fillStyle = '#a78bfa'; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.fillText('AI', ai.x + PW / 2, ai.y - 3); }
+    }
+    drawAvatarChar(ctx, playerAvatar(), you.x, you.y, PW, PH, 1);
+    ctx.fillStyle = 'rgba(245,240,255,0.92)'; ctx.font = '14px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('Dist: ' + Math.floor(dist / 10), 12, 22);
+    if(vsAI){ ctx.textAlign = 'right'; ctx.fillStyle = ai.alive ? '#a78bfa' : '#5cffb1'; ctx.fillText(ai.alive ? 'AI racing' : 'AI out @ ' + aiDist, W - 12, 22); }
+  }
+  function over(){
+    running = false; cancelAnimationFrame(raf);
+    const score = Math.floor(dist / 10);
+    const coins = Math.min(40, Math.floor(score / 4));
+    if(coins > 0) awardCoins(coins);
+    let verdict = '';
+    if(vsAI) verdict = (!ai.alive && score >= aiDist) ? ' You beat the AI! 🏆' : (ai.alive ? ' The AI was still running.' : ' The AI reached ' + aiDist + '.');
+    statusEl.textContent = 'Crashed at ' + score + '.' + verdict;
+    document.getElementById('crEnd').innerHTML = coinToastHTML(coins) + scoreEntryHTML('color-rush', score);
+    wireScoreEntry('color-rush', score, 'crLB', () => {
+      modesEl.style.display = '';
+      document.getElementById('crEnd').innerHTML = '';
+      statusEl.textContent = 'Pick a mode to run again.';
+      drawIdle();
     });
   }
-
-  function finish(){
-    clearInterval(timer);
-    running = false;
-    buttonsEl.innerHTML = '';
-    const record = isNewRecord('color-rush', score, false);
-    const coins = Math.min(25, score);
-    awardCoins(coins);
-    document.getElementById('crResult').innerHTML =
-      (record ? '<p class="record-banner">&#127942; NEW RECORD &#127942;</p>' : '') + coinToastHTML(coins) + `
-      <p class="toast">Final score: ${score}. Enter your name to save it:</p>
-      <div style="display:flex; gap:8px; justify-content:center;">
-        <input id="crName" placeholder="Your name" maxlength="16" />
-        <button class="btn btn-small btn-primary" id="crSave">Save Score</button>
-      </div>`;
-    document.getElementById('crSave').addEventListener('click', async () => {
-      const name = document.getElementById('crName').value.trim() || 'Anonymous';
-      await saveScore('color-rush', name, score, false);
-      document.getElementById('crLB').innerHTML = leaderboardHTML('color-rush','pts');
-      document.getElementById('crSave').disabled = true;
-    });
+  function drawIdle(){
+    obstacles = []; dist = 0; speed = 4.4;
+    you = mkRunner(100); ai = null; vsAI = false;
+    ctx.clearRect(0, 0, W, H);
+    drawGround();
+    drawAvatarChar(ctx, playerAvatar(), you.x, you.y, PW, PH, 1);
+    ctx.fillStyle = 'rgba(245,240,255,0.72)'; ctx.font = '13px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('Pick Solo or Race the AI below', W / 2, 44);
   }
+  function press(){ if(running) jump(you); }
+  function onKey(e){ if(e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); press(); } }
+  function onTap(e){ e.preventDefault(); press(); }
+  document.getElementById('crSolo').addEventListener('click', () => start(false));
+  document.getElementById('crVs').addEventListener('click', () => start(true));
+  document.addEventListener('keydown', onKey);
+  canvas.addEventListener('pointerdown', onTap);
+  running = false;
+  drawIdle();
+  activeGameCleanup = () => { running = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', onKey); canvas.removeEventListener('pointerdown', onTap); };
 }
 
 /* ---------- Mole Smash ---------- */
@@ -1588,7 +1645,7 @@ function openNeonObby(){
 
   function loadLevel(n){
     level = buildObbyLevel(n);
-    player = { x: level.startX, y: level.groundY - 24, w: 20, h: 24, vx: 0, vy: 0, onGround: false };
+    player = { x: level.startX, y: level.groundY - 24, w: 20, h: 24, vx: 0, vy: 0, onGround: false, dir: 1 };
     cam = 0;
   }
   function reset(){
@@ -1617,6 +1674,7 @@ function openNeonObby(){
     player.vx = 0;
     if(keys.left) player.vx = -moveSpeed;
     if(keys.right) player.vx = moveSpeed;
+    if(player.vx > 0) player.dir = 1; else if(player.vx < 0) player.dir = -1;
     player.vy += gravity;
     if(player.vy > 14) player.vy = 14;
 
@@ -1668,8 +1726,7 @@ function openNeonObby(){
     ctx.fillStyle = goalColor;
     ctx.fillRect(level.goalX, level.groundY - 60, 26, 18);
 
-    ctx.fillStyle = accent;
-    ctx.fillRect(player.x, player.y, player.w, player.h);
+    drawAvatarChar(ctx, playerAvatar(), player.x, player.y, player.w, player.h, player.dir);
     ctx.restore();
 
     ctx.fillStyle = '#f5f0ff';
@@ -2043,6 +2100,33 @@ function openFlappy(){
     if(birdY + br > H || birdY - br < 0){ gameOver(); }
   }
 
+  function drawBird(x, y, v){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.max(-0.5, Math.min(0.9, v * 0.06)));
+    // tail
+    ctx.fillStyle = shadeHex(birdColor, -55);
+    ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(-20, -7); ctx.lineTo(-11, 3); ctx.closePath(); ctx.fill();
+    // body
+    ctx.fillStyle = birdColor; ctx.shadowColor = birdColor; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.ellipse(0, 0, 13, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    // belly
+    ctx.fillStyle = shadeHex(birdColor, 45);
+    ctx.beginPath(); ctx.ellipse(-1, 3, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+    // wing (up when flapping/rising, down when falling)
+    ctx.fillStyle = shadeHex(birdColor, -40);
+    ctx.beginPath();
+    if(v < 0){ ctx.moveTo(-2, 0); ctx.quadraticCurveTo(-12, -13, -15, -4); ctx.quadraticCurveTo(-9, 0, -2, 0); }
+    else { ctx.moveTo(-2, 0); ctx.quadraticCurveTo(-12, 11, -15, 3); ctx.quadraticCurveTo(-9, 0, -2, 0); }
+    ctx.fill();
+    // beak
+    ctx.fillStyle = '#ff8c00';
+    ctx.beginPath(); ctx.moveTo(11, -2); ctx.lineTo(22, 1); ctx.lineTo(11, 4); ctx.closePath(); ctx.fill();
+    // eye
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(6, -3, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1b1b1b'; ctx.beginPath(); ctx.arc(7, -3, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   function draw(){
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = pipeColor;
@@ -2050,8 +2134,7 @@ function openFlappy(){
       ctx.fillRect(p.x, 0, pipeW, p.gapY);
       ctx.fillRect(p.x, p.gapY + gapH, pipeW, H - p.gapY - gapH);
     }
-    ctx.fillStyle = birdColor;
-    ctx.beginPath(); ctx.arc(70, birdY, 12, 0, Math.PI * 2); ctx.fill();
+    drawBird(70, birdY, vy);
     ctx.fillStyle = '#f5f0ff';
     ctx.font = '16px "JetBrains Mono", monospace';
     ctx.fillText(score, W / 2 - 5, 30);
@@ -4009,9 +4092,7 @@ function openSkyTower(){
       ctx.shadowBlur = 0;
     }
     const py = player.y - cameraY;
-    ctx.fillStyle = '#4deeea'; ctx.shadowColor = '#4deeea'; ctx.shadowBlur = 12;
-    ctx.fillRect(player.x, py, PW, PH); ctx.shadowBlur = 0;
-    ctx.fillStyle = '#05070f'; ctx.fillRect(player.x + 4, py + 7, 4, 4); ctx.fillRect(player.x + PW - 8, py + 7, 4, 4);
+    drawAvatarChar(ctx, playerAvatar(), player.x, py, PW, PH, player.vx >= 0 ? 1 : -1);
     ctx.fillStyle = 'rgba(245,240,255,0.92)'; ctx.font = '14px monospace'; ctx.textAlign = 'left';
     ctx.fillText('Height: ' + score, 12, 22);
   }
@@ -4079,34 +4160,47 @@ function openCashClicker(){
     return Math.floor(n).toString();
   }
   function save(){ try { localStorage.setItem(KEY, JSON.stringify(sv)); } catch(e){ /* ignore */ } }
-  function render(){
-    cashEl.textContent = '$' + fmt(sv.cash);
-    ratesEl.textContent = `${fmt(perTap())} / tap • ${fmt(perSec())} / sec • total earned $${fmt(sv.total)}`;
-    shopEl.innerHTML = UPGRADES.map(u => {
-      const cost = costOf(u);
-      const afford = sv.cash >= cost;
-      return `<button class="btn btn-small ${afford ? 'btn-primary' : 'btn-ghost'}" data-up="${u.id}" ${afford ? '' : 'disabled'}
+  const shopBtns = {};
+  // Rebuilds the shop DOM — only called when levels/costs change (buy/reset), never on the auto tick.
+  function renderShop(){
+    shopEl.innerHTML = UPGRADES.map(u =>
+      `<button class="btn btn-small btn-ghost" data-up="${u.id}"
         style="display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left;">
         <span>${u.icon} <b>${u.name}</b> <span style="color:var(--muted);">Lv ${sv.lv[u.id]} — ${u.desc}</span></span>
-        <span>$${fmt(cost)}</span></button>`;
-    }).join('');
-    shopEl.querySelectorAll('[data-up]').forEach(b => b.addEventListener('click', () => buy(b.dataset.up)));
+        <span class="cc-cost">$${fmt(costOf(u))}</span></button>`
+    ).join('');
+    for(const k in shopBtns) delete shopBtns[k];
+    shopEl.querySelectorAll('[data-up]').forEach(b => { shopBtns[b.dataset.up] = b; b.addEventListener('click', () => buy(b.dataset.up)); });
   }
+  // Cheap per-frame update: only text + affordability toggles, so buttons are never replaced mid-click.
+  function renderStats(){
+    cashEl.textContent = '$' + fmt(sv.cash);
+    ratesEl.textContent = `${fmt(perTap())} / tap • ${fmt(perSec())} / sec • total earned $${fmt(sv.total)}`;
+    for(const u of UPGRADES){
+      const b = shopBtns[u.id];
+      if(!b) continue;
+      const afford = sv.cash >= costOf(u);
+      b.disabled = !afford;
+      b.classList.toggle('btn-primary', afford);
+      b.classList.toggle('btn-ghost', !afford);
+    }
+  }
+  function render(){ renderShop(); renderStats(); }
   function buy(id){
     const u = UPGRADES.find(x => x.id === id);
     const cost = costOf(u);
     if(sv.cash < cost) return;
-    sv.cash -= cost; sv.lv[id]++; save(); render();
+    sv.cash -= cost; sv.lv[id]++; save(); renderShop(); renderStats();
   }
   function tap(){
     const gain = perTap();
     sv.cash += gain; sv.total += gain;
     coinBtn.style.transform = 'scale(0.92)';
     setTimeout(() => { coinBtn.style.transform = 'scale(1)'; }, 60);
-    render();
+    renderStats();
   }
   coinBtn.addEventListener('click', tap);
-  const auto = setInterval(() => { const g = perSec() / 10; if(g > 0){ sv.cash += g; sv.total += g; render(); } }, 100);
+  const auto = setInterval(() => { const g = perSec() / 10; if(g > 0){ sv.cash += g; sv.total += g; renderStats(); } }, 100);
   const saver = setInterval(save, 3000);
   document.getElementById('ccEnd').innerHTML = `
     <button class="btn btn-small btn-primary" id="ccSubmit">Submit total to leaderboard</button>
@@ -4721,6 +4815,88 @@ function shadeHex(hex, amt){
   const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
   const b = Math.max(0, Math.min(255, (n & 255) + amt));
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+function playerAvatar(){ return (player && player.avatar) ? player.avatar : {}; }
+
+function rrPath(ctx, x, y, w, h, r){
+  r = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+}
+
+function drawHatCanvas(ctx, hat, hc, x, y, w, headH){
+  if(!hat || hat === 'none') return;
+  const cx = x + w/2;
+  ctx.save();
+  ctx.fillStyle = hc;
+  if(hat === 'cap'){
+    ctx.beginPath(); ctx.moveTo(x+w*0.2, y+headH*0.08); ctx.quadraticCurveTo(cx, y-headH*0.4, x+w*0.8, y+headH*0.08); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = shadeHex(hc,-34); ctx.fillRect(cx, y, w*0.36, headH*0.16);
+  } else if(hat === 'crown'){
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath(); ctx.moveTo(x+w*0.22,y+headH*0.12); ctx.lineTo(x+w*0.22,y-headH*0.32); ctx.lineTo(cx-w*0.1,y+headH*0.02); ctx.lineTo(cx,y-headH*0.44); ctx.lineTo(cx+w*0.1,y+headH*0.02); ctx.lineTo(x+w*0.78,y-headH*0.32); ctx.lineTo(x+w*0.78,y+headH*0.12); ctx.closePath(); ctx.fill();
+  } else if(hat === 'tophat'){
+    ctx.fillStyle = '#1b1b1b'; ctx.fillRect(x+w*0.08, y-headH*0.02, w*0.84, headH*0.16);
+    ctx.fillRect(x+w*0.24, y-headH*0.62, w*0.52, headH*0.62);
+    ctx.fillStyle = hc; ctx.fillRect(x+w*0.24, y-headH*0.12, w*0.52, headH*0.1);
+  } else if(hat === 'beanie'){
+    ctx.beginPath(); ctx.moveTo(x+w*0.18, y+headH*0.1); ctx.quadraticCurveTo(cx, y-headH*0.48, x+w*0.82, y+headH*0.1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = shadeHex(hc,30); ctx.fillRect(x+w*0.18, y+headH*0.02, w*0.64, headH*0.16);
+  } else if(hat === 'wizard'){
+    ctx.beginPath(); ctx.moveTo(cx, y-headH*0.72); ctx.lineTo(x+w*0.2, y+headH*0.12); ctx.lineTo(x+w*0.8, y+headH*0.12); ctx.closePath(); ctx.fill();
+  } else if(hat === 'halo'){
+    ctx.strokeStyle = '#ffe066'; ctx.lineWidth = Math.max(1.6, w*0.06);
+    ctx.beginPath(); ctx.ellipse(cx, y-headH*0.22, w*0.3, headH*0.14, 0, 0, Math.PI*2); ctx.stroke();
+  } else if(hat === 'horns'){
+    ctx.fillStyle = '#eef2f7';
+    ctx.beginPath(); ctx.moveTo(x+w*0.26,y+headH*0.06); ctx.quadraticCurveTo(x+w*0.08,y-headH*0.42,x+w*0.3,y-headH*0.5); ctx.quadraticCurveTo(x+w*0.34,y-headH*0.08,x+w*0.26,y+headH*0.06); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x+w*0.74,y+headH*0.06); ctx.quadraticCurveTo(x+w*0.92,y-headH*0.42,x+w*0.7,y-headH*0.5); ctx.quadraticCurveTo(x+w*0.66,y-headH*0.08,x+w*0.74,y+headH*0.06); ctx.fill();
+  } else if(hat === 'headphones'){
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = Math.max(2, w*0.09);
+    ctx.beginPath(); ctx.arc(cx, y+headH*0.22, w*0.36, Math.PI*1.06, Math.PI*1.94); ctx.stroke();
+    ctx.fillStyle = hc; ctx.fillRect(x+w*0.04, y+headH*0.1, w*0.13, headH*0.42); ctx.fillRect(x+w*0.83, y+headH*0.1, w*0.13, headH*0.42);
+  } else if(hat === 'bow'){
+    ctx.beginPath(); ctx.moveTo(cx, y+headH*0.12); ctx.lineTo(cx-w*0.17, y-headH*0.04); ctx.lineTo(cx-w*0.17, y+headH*0.28); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx, y+headH*0.12); ctx.lineTo(cx+w*0.17, y-headH*0.04); ctx.lineTo(cx+w*0.17, y+headH*0.28); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = shadeHex(hc,-34); ctx.beginPath(); ctx.arc(cx, y+headH*0.12, Math.max(1.4,w*0.05), 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Draws the player's blocky avatar as a game character within (x,y,w,h). dir>=0 faces right.
+function drawAvatarChar(ctx, av, x, y, w, h, dir){
+  av = av || {};
+  const skin = av.skin || '#f1c27d', shirt = av.shirt || '#4deeea', pants = av.pants || '#2b3563';
+  const hc = av.hatColor || '#ff4d94';
+  const d = dir >= 0 ? 1 : -1;
+  const headH = h*0.36, bodyH = h*0.40, legTop = y+headH+bodyH, legH = (y+h) - legTop;
+  const cx = x + w/2;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  ctx.beginPath(); ctx.ellipse(cx, y+h, w*0.42, h*0.05, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = pants;
+  ctx.fillRect(x+w*0.24, legTop, w*0.20, legH);
+  ctx.fillRect(x+w*0.56, legTop, w*0.20, legH);
+  ctx.fillStyle = '#20242e';
+  ctx.fillRect(x+w*0.19, y+h-h*0.07, w*0.30, h*0.07);
+  ctx.fillRect(x+w*0.51, y+h-h*0.07, w*0.30, h*0.07);
+  ctx.fillStyle = skin;
+  ctx.fillRect(x+w*0.02, y+headH+bodyH*0.08, w*0.13, bodyH*0.62);
+  ctx.fillRect(x+w*0.85, y+headH+bodyH*0.08, w*0.13, bodyH*0.62);
+  ctx.fillStyle = shirt;
+  rrPath(ctx, x+w*0.14, y+headH, w*0.72, bodyH+2, w*0.16); ctx.fill();
+  ctx.fillStyle = skin;
+  rrPath(ctx, x+w*0.18, y, w*0.64, headH+1, w*0.2); ctx.fill();
+  ctx.fillStyle = '#1b1b1b';
+  const ew = Math.max(1.6, w*0.08), eh = Math.max(2, headH*0.28), eyeY = y+headH*0.4;
+  const shift = d>0 ? w*0.05 : -w*0.05;
+  ctx.fillRect(cx - w*0.18 + shift, eyeY, ew, eh);
+  ctx.fillRect(cx + w*0.06 + shift, eyeY, ew, eh);
+  drawHatCanvas(ctx, av.hat, hc, x, y, w, headH);
+  ctx.restore();
 }
 
 function avatarSVG(av, size){
