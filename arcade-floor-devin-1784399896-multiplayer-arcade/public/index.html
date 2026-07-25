@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Arcade Floor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="nav">
+    <div class="logo"><span class="logo-dot"></span> ARCADE FLOOR</div>
+    <div class="nav-links">
+      <a href="#arcade">The Floor</a>
+      <a href="#submit">Add A Cabinet</a>
+      <a href="#oracle">Ask The Oracle</a>
+    </div>
+    <div class="nav-right">
+      <div class="online-badge" id="onlineBadge" title="Players connected right now">
+        <span class="online-dot"></span> <span id="onlineCount">1</span> online
+      </div>
+      <button class="btn btn-ghost btn-small" id="avatarBtn" title="Customize your avatar" style="display:flex; align-items:center; gap:6px;"><span id="avatarBadge" style="display:inline-flex;"></span> Avatar</button>
+      <button class="btn btn-ghost btn-small" id="themesBtn">&#127912; Themes</button>
+      <button class="btn btn-primary btn-small" id="wheelBtn">&#127920; Spin</button>
+      <div class="coin-badge" id="coinBadge">&#129689; 0</div>
+      <div class="floor-count" id="floorCount">— cabinets on the floor</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="hero">
+    <div class="wrap">
+      <div class="marquee-frame"><div class="marquee-inner">NOW OPEN · PLAYER BUILT</div></div>
+      <h1 class="hero-title" id="heroTitle"></h1>
+      <p class="hero-sub">Every cabinet here was built by a player. Play the floor, challenge someone to a live match, install one of your own, or let the Oracle read your answers and point you to the machine that's yours tonight.</p>
+      <div class="hero-ctas">
+        <a href="#arcade" class="btn btn-primary">Step Onto The Floor</a>
+        <a href="#oracle" class="btn btn-ghost">Ask The Oracle</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="arcade">
+    <div class="wrap">
+      <p class="eyebrow">The Floor</p>
+      <h2 class="section-title">Pick A Cabinet</h2>
+      <p class="section-sub">House machines plus whatever the floor has added. Leaderboards and cabinets are shared live with everyone else online right now.</p>
+      <div class="games-grid" id="gamesGrid"></div>
+    </div>
+  </section>
+
+  <section id="submit">
+    <div class="wrap">
+      <p class="eyebrow">Build</p>
+      <h2 class="section-title">Install Your Cabinet</h2>
+      <p class="section-sub">Made a game? Bring it to the floor. Give it a name and a personality — it appears for everyone on the floor instantly, and the Oracle starts recommending it the moment it's live.</p>
+      <form class="booth" id="submitForm">
+        <div class="field">
+          <label for="gTitle">Game title</label>
+          <input type="text" id="gTitle" maxlength="40" placeholder="e.g. Neon Gauntlet" required />
+        </div>
+        <div class="field">
+          <label for="gCreator">Your name</label>
+          <input type="text" id="gCreator" maxlength="24" placeholder="e.g. Jasmine" required />
+        </div>
+        <div class="field span-2">
+          <label for="gPitch">One-line pitch</label>
+          <textarea id="gPitch" rows="2" maxlength="140" placeholder="What does someone do the second they press start?" required></textarea>
+        </div>
+        <div class="field">
+          <label>Pace</label>
+          <div class="chip-group" id="chipPace">
+            <button type="button" class="chip" data-value="fast">Fast &amp; frantic</button>
+            <button type="button" class="chip" data-value="slow">Slow &amp; thoughtful</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Players</label>
+          <div class="chip-group" id="chipPlayers">
+            <button type="button" class="chip" data-value="solo">Solo</button>
+            <button type="button" class="chip" data-value="multi">Multiplayer / vs. rival</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Type of challenge</label>
+          <div class="chip-group" id="chipType">
+            <button type="button" class="chip" data-value="reflex">Reflex</button>
+            <button type="button" class="chip" data-value="puzzle">Puzzle</button>
+            <button type="button" class="chip" data-value="strategy">Strategy</button>
+            <button type="button" class="chip" data-value="trivia">Trivia / knowledge</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Difficulty</label>
+          <div class="chip-group" id="chipDifficulty">
+            <button type="button" class="chip" data-value="easy">Easy</button>
+            <button type="button" class="chip" data-value="medium">Medium</button>
+            <button type="button" class="chip" data-value="hard">Hard</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Marquee color</label>
+          <div class="chip-group" id="chipAccent">
+            <button type="button" class="chip" data-value="cyan">Cyan</button>
+            <button type="button" class="chip" data-value="pink">Pink</button>
+            <button type="button" class="chip" data-value="yellow">Yellow</button>
+            <button type="button" class="chip" data-value="green">Green</button>
+          </div>
+        </div>
+        <div class="field span-2">
+          <label>How does it play?</label>
+          <div class="chip-group" id="chipMode">
+            <button type="button" class="chip" data-value="code">Paste my own code</button>
+            <button type="button" class="chip" data-value="link">Link to it elsewhere</button>
+            <button type="button" class="chip" data-value="none">Not playable yet</button>
+          </div>
+        </div>
+        <div class="field span-2" id="modeUrlField" style="display:none;">
+          <label for="gUrl">Play link</label>
+          <input type="url" id="gUrl" placeholder="https://..." />
+        </div>
+        <div class="field span-2" id="modeCodeField" style="display:none;">
+          <label for="gCode">Your game's code</label>
+          <textarea id="gCode" rows="9" spellcheck="false" placeholder="A full, self-contained HTML page. Put your CSS in a &lt;style&gt; tag and your JS in a &lt;script&gt; tag — canvas, DOM, whatever your game needs."></textarea>
+          <p class="form-note">Runs sandboxed in its own frame — it can't see the rest of the floor or anyone's data. To put a score on the shared leaderboard, call <code>parent.postMessage({type:'arcade-score', score: yourScore}, '*')</code> from your code when the game ends.</p>
+        </div>
+        <div class="field span-2">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Install Cabinet</button>
+          <div class="toast" id="submitToast"></div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section id="oracle">
+    <div class="wrap">
+      <p class="eyebrow" style="justify-content:center; text-align:center;">The Oracle</p>
+      <h2 class="section-title" style="text-align:center;">Find Your Game</h2>
+      <p class="section-sub" style="text-align:center; margin-left:auto; margin-right:auto;">Five questions. One perfect match. No wrong answers — just the wrong cabinet for tonight.</p>
+      <div class="oracle-box" id="oracleBox"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  ARCADE FLOOR — built cabinet by cabinet. Leaderboards, cabinets, and live matches are shared with everyone on the floor.
+</footer>
+
+<div id="modalRoot"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/net.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
